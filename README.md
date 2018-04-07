@@ -1,0 +1,30 @@
+# stager
+
+> **Stage files** - This crate stages files for packaging
+
+[![Travis Status](https://travis-ci.org/crate-ci/stager.svg?branch=master)](https://travis-ci.org/crate-ci/stager) [![Appveyor Status](https://ci.appveyor.com/api/projects/status/n1nqaitd5uja8tsi/branch/master?svg=true)](https://ci.appveyor.com/project/johannhof/stager/branch/master) [![Crates Status](https://img.shields.io/crates/v/liquid.svg)](https://crates.io/crates/liquid) [![Coverage Status](https://coveralls.io/repos/github/crate-ci/stager/badge.svg?branch=master)](https://coveralls.io/github/crate-ci/stager?branch=master) [![Dependency Status](https://dependencyci.com/github/crate-ci/stager/badge)](https://dependencyci.com/github/crate-ci/stager)
+
+## Install
+
+Add to your `Cargo.toml`:
+
+```toml
+[dev-dependencies]
+stager = "0.1"
+```
+
+## License
+
+Licensed under either of
+
+ * Apache License, Version 2.0, ([LICENSE-APACHE](LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
+ * MIT license ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
+
+at your option.
+
+### Contribution
+
+Unless you explicitly state otherwise, any contribution intentionally
+submitted for inclusion in the work by you, as defined in the Apache-2.0
+license, shall be dual licensed as above, without any additional terms or
+conditions.
