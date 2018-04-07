@@ -1,6 +1,31 @@
 [package]
 name = "stager"
 version = "0.1.0"
-authors = ["Ed Page <eopage@byu.net>"]
+authors = ["Ed Page <eopage@gmail.com"]
+
+[[bin]]
+name = "staging"
+required-features = ["cli"]
+
+[features]
+default = []
+cli = [
+    "env_logger",
+    "exitcode",
+    "structopt",
+]
 
 [dependencies]
+failure = "0.1.1"
+globwalk = "0.1"
+liquid = "0.14.1"
+log = "0.4"
+serde = { version = "1.0", features = ["derive"] }
+
+env_logger = { version = "0.5", optional = true }
+exitcode = { version = "1.1", optional = true }
+structopt = { version = "0.2", optional = true }
+
+serde_json = { version = "1.0", optional = true }
+serde_yaml = { version = "0.7", optional = true }
+toml = { version = "0.4.0", optional = true }

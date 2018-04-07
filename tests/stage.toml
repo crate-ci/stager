@@ -1,0 +1,8 @@
+[["src"]]
+type="SourceFile"
+path="Cargo.toml"
+
+[["src"]]
+type="SourceFiles"
+path="./"
+pattern="*.rs"
