@@ -6,7 +6,7 @@
 [![Appveyor Status](https://ci.appveyor.com/api/projects/status/mj0bbemw47jyfwta/branch/master?svg=true)](https://ci.appveyor.com/project/epage/stager/branch/master)
 [![Documentation](https://img.shields.io/badge/docs-master-blue.svg)][Documentation]
 ![License](https://img.shields.io/crates/l/assert_cli.svg)
-[![Crates Status](https://img.shields.io/crates/v/liquid.svg)](https://crates.io/crates/liquid)
+[![Crates Status](https://img.shields.io/crates/v/liquid.svg)](https://crates.io/crates/stager)
 
 ## Install
 
