@@ -1,7 +1,15 @@
 [package]
 name = "stager"
 version = "0.1.0"
+description = "Stage files for packaging."
 authors = ["Ed Page <eopage@gmail.com"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/crate-ci/stager.git"
+homepage = "https://github.com/crate-ci/stager"
+documentation = "http://docs.rs/stager/"
+readme = "README.md"
+categories = ["development-tools::build-utils"]
+keywords = ["cli", "command-line-interface", "packaging"]
 
 [[bin]]
 name = "staging"
