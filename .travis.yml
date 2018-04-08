@@ -33,8 +33,8 @@ install:
 script:
 - cargo check --verbose
 - cargo check --verbose --no-default-features
-- cargo check --verbose --all-default-features
-- cargo test  --verbose --all-default-features
+- cargo check --verbose --all-features
+- cargo test  --verbose --all-features
 
 branches:
   only:
