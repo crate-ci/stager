@@ -2,7 +2,11 @@
 
 > **Stage files** - This crate stages files for packaging
 
-[![Travis Status](https://travis-ci.org/crate-ci/stager.svg?branch=master)](https://travis-ci.org/crate-ci/stager) [![Appveyor Status](https://ci.appveyor.com/api/projects/status/n1nqaitd5uja8tsi/branch/master?svg=true)](https://ci.appveyor.com/project/johannhof/stager/branch/master) [![Crates Status](https://img.shields.io/crates/v/liquid.svg)](https://crates.io/crates/liquid) [![Coverage Status](https://coveralls.io/repos/github/crate-ci/stager/badge.svg?branch=master)](https://coveralls.io/github/crate-ci/stager?branch=master) [![Dependency Status](https://dependencyci.com/github/crate-ci/stager/badge)](https://dependencyci.com/github/crate-ci/stager)
+[![Travis Status](https://travis-ci.org/crate-ci/stager.svg?branch=master)](https://travis-ci.org/crate-ci/stager)
+[![Appveyor Status](https://ci.appveyor.com/api/projects/status/mj0bbemw47jyfwta/branch/master?svg=true)](https://ci.appveyor.com/project/epage/stager/branch/master)
+[![Documentation](https://img.shields.io/badge/docs-master-blue.svg)][Documentation]
+![License](https://img.shields.io/crates/l/assert_cli.svg)
+[![Crates Status](https://img.shields.io/crates/v/liquid.svg)](https://crates.io/crates/liquid)
 
 ## Install
 
@@ -28,3 +32,6 @@ Unless you explicitly state otherwise, any contribution intentionally
 submitted for inclusion in the work by you, as defined in the Apache-2.0
 license, shall be dual licensed as above, without any additional terms or
 conditions.
+
+[Crates.io]: https://crates.io/crates/stager
+[Documentation]: https://docs.rs/stager
