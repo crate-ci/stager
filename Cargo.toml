@@ -9,7 +9,7 @@ homepage = "https://github.com/crate-ci/stager"
 documentation = "http://docs.rs/stager/"
 readme = "README.md"
 categories = ["development-tools::build-utils"]
-keywords = ["cli", "command-line-interface", "packaging"]
+keywords = ["cli", "packaging"]
 
 [[bin]]
 name = "staging"
