@@ -128,13 +128,13 @@ mod object {
 
     pub fn insert(
         object: &mut liquid::Object,
-        path: Vec<String>,
+        path: &[String],
         key: String,
         value: liquid::Value,
     ) -> Result<(), failure::Error> {
         let leaf = path.iter().cloned().fold(Ok(object), |object, key| {
             let cur_object = object?;
-            let object = cur_object
+            cur_object
                 .entry(key)
                 .or_insert_with(|| liquid::Value::Object(liquid::Object::new()))
                 .as_object_mut()
@@ -143,8 +143,7 @@ mod object {
                         "Aborting: Duplicate in data tree. Would overwrite {:?} ",
                         path
                     ))
-                });
-            object
+                })
         })?;
 
         match leaf.insert(key, value) {
@@ -190,7 +189,7 @@ fn load_data_dirs(roots: &[path::PathBuf]) -> Result<liquid::Object, failure::Er
             let data_file = entry.path();
             let data = load_data(data_file)?;
             let rel_source = data_file.strip_prefix(&root)?;
-            let path = rel_source.parent().unwrap_or(path::Path::new(""));
+            let path = rel_source.parent().unwrap_or_else(|| path::Path::new(""));
             let path: Option<Vec<_>> = path.components()
                 .map(|c| {
                     let c: &ffi::OsStr = c.as_ref();
@@ -216,7 +215,7 @@ fn load_data_dirs(roots: &[path::PathBuf]) -> Result<liquid::Object, failure::Er
                     continue;
                 }
             };
-            object::insert(&mut object, path, key, data)?;
+            object::insert(&mut object, &path, key, data)?;
         }
     }
 
@@ -318,7 +317,7 @@ fn main() {
     let code = match run() {
         Ok(e) => e,
         Err(ref e) => {
-            write!(&mut io::stderr(), "{}\n", e).expect("writing to stderr won't fail");
+            writeln!(&mut io::stderr(), "{}", e).expect("writing to stderr won't fail");
             exitcode::SOFTWARE
         }
     };
