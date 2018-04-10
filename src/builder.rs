@@ -40,7 +40,7 @@ impl ActionBuilder for Directory {
 #[derive(Clone, Debug)]
 pub struct SourceFile {
     ///  Specifies the full path of the file to be copied into the target directory
-    pub path: String,
+    pub path: path::PathBuf,
     /// Specifies the name the target file should be renamed as when copying from the source file.
     /// Default is the filename of the source file.
     pub rename: Option<String>,
@@ -52,7 +52,7 @@ pub struct SourceFile {
 
 impl ActionBuilder for SourceFile {
     fn build(&self, target_dir: &path::Path) -> Result<Vec<Box<action::Action>>, failure::Error> {
-        let path = path::Path::new(&self.path);
+        let path = self.path.as_path();
         let filename = self.rename
             .as_ref()
             .map(|n| ffi::OsStr::new(n))
@@ -82,7 +82,7 @@ impl ActionBuilder for SourceFile {
 pub struct SourceFiles {
     ///  Specifies the root path that `patterns` will be run on to identify files to be copied into
     ///  the target directory.
-    pub path: String,
+    pub path: path::PathBuf,
     /// Specifies the pattern for executing the recursive/multifile match.
     pub pattern: Vec<String>,
     pub follow_links: bool,
@@ -94,7 +94,7 @@ impl ActionBuilder for SourceFiles {
         let mut actions: Vec<Box<action::Action>> = Vec::new();
         // TODO(epage): swap out globwalk for something that uses gitignore so we can have
         // exclusion support.
-        let source_root = path::Path::new(&self.path);
+        let source_root = self.path.as_path();
         for entry in globwalk::GlobWalker::from_patterns(&self.pattern, source_root)?
             .follow_links(self.follow_links)
         {
@@ -129,7 +129,7 @@ impl ActionBuilder for SourceFiles {
 #[derive(Clone, Debug)]
 pub struct Symlink {
     /// The literal path for the target to point to.
-    pub target: String,
+    pub target: path::PathBuf,
     /// Specifies the name the symlink should be given.
     /// Default is the filename of the `target`.
     pub rename: String,
@@ -138,7 +138,7 @@ pub struct Symlink {
 
 impl ActionBuilder for Symlink {
     fn build(&self, target_dir: &path::Path) -> Result<Vec<Box<action::Action>>, failure::Error> {
-        let target = path::Path::new(&self.target);
+        let target = self.target.as_path();
         let staged = target_dir.join(&self.rename);
         let link: Box<action::Action> = Box::new(action::Symlink::new(&staged, target));
 

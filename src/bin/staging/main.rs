@@ -2,6 +2,8 @@
 
 extern crate env_logger;
 extern crate exitcode;
+extern crate globwalk;
+extern crate liquid;
 extern crate stager;
 
 #[macro_use]
@@ -22,56 +24,62 @@ use std::ffi;
 use std::fs;
 use std::io::Write;
 use std::io;
-use std::io::Read;
 use std::path;
 use std::process;
 
 use failure::ResultExt;
 use structopt::StructOpt;
 
-#[cfg(feature = "serde_yaml")]
-fn load_yaml(path: &path::Path) -> Result<stager::de::Staging, failure::Error> {
-    let f = fs::File::open(path)?;
-    serde_yaml::from_reader(f).map_err(|e| e.into())
-}
+use stager::de::Render;
 
-#[cfg(not(feature = "serde_yaml"))]
-fn load_yaml(_path: &path::Path) -> Result<stager::de::Staging, failure::Error> {
-    bail!("yaml is unsupported");
-}
+mod stage {
+    use super::*;
+    use std::io::Read;
 
-#[cfg(feature = "serde_json")]
-fn load_json(path: &path::Path) -> Result<stager::de::Staging, failure::Error> {
-    let f = fs::File::open(path)?;
-    serde_json::from_reader(f).map_err(|e| e.into())
-}
+    #[cfg(feature = "serde_yaml")]
+    pub fn load_yaml(path: &path::Path) -> Result<stager::de::Staging, failure::Error> {
+        let f = fs::File::open(path)?;
+        serde_yaml::from_reader(f).map_err(|e| e.into())
+    }
 
-#[cfg(not(feature = "serde_json"))]
-fn load_json(_path: &path::Path) -> Result<stager::de::Staging, failure::Error> {
-    bail!("json is unsupported");
-}
+    #[cfg(not(feature = "serde_yaml"))]
+    pub fn load_yaml(_path: &path::Path) -> Result<stager::de::Staging, failure::Error> {
+        bail!("yaml is unsupported");
+    }
 
-#[cfg(feature = "toml")]
-fn load_toml(path: &path::Path) -> Result<stager::de::Staging, failure::Error> {
-    let mut f = fs::File::open(path)?;
-    let mut text = String::new();
-    f.read_to_string(&mut text)?;
-    toml::from_str(&text).map_err(|e| e.into())
-}
+    #[cfg(feature = "serde_json")]
+    pub fn load_json(path: &path::Path) -> Result<stager::de::Staging, failure::Error> {
+        let f = fs::File::open(path)?;
+        serde_json::from_reader(f).map_err(|e| e.into())
+    }
 
-#[cfg(not(feature = "toml"))]
-fn load_toml(_path: &path::Path) -> Result<stager::de::Staging, failure::Error> {
-    bail!("toml is unsupported");
+    #[cfg(not(feature = "serde_json"))]
+    pub fn load_json(_path: &path::Path) -> Result<stager::de::Staging, failure::Error> {
+        bail!("json is unsupported");
+    }
+
+    #[cfg(feature = "toml")]
+    pub fn load_toml(path: &path::Path) -> Result<stager::de::Staging, failure::Error> {
+        let mut f = fs::File::open(path)?;
+        let mut text = String::new();
+        f.read_to_string(&mut text)?;
+        toml::from_str(&text).map_err(|e| e.into())
+    }
+
+    #[cfg(not(feature = "toml"))]
+    pub fn load_toml(_path: &path::Path) -> Result<stager::de::Staging, failure::Error> {
+        bail!("toml is unsupported");
+    }
 }
 
 fn load_stage(path: &path::Path) -> Result<stager::de::Staging, failure::Error> {
     let extension = path.extension().unwrap_or_default();
     let value = if extension == ffi::OsStr::new("yaml") {
-        load_yaml(path)
+        stage::load_yaml(path)
     } else if extension == ffi::OsStr::new("toml") {
-        load_toml(path)
+        stage::load_toml(path)
     } else if extension == ffi::OsStr::new("json") {
-        load_json(path)
+        stage::load_json(path)
     } else {
         bail!("Unsupported file type");
     }?;
@@ -79,13 +87,154 @@ fn load_stage(path: &path::Path) -> Result<stager::de::Staging, failure::Error> 
     Ok(value)
 }
 
+mod object {
+    use super::*;
+    use std::io::Read;
+
+    #[cfg(feature = "serde_yaml")]
+    pub fn load_yaml(path: &path::Path) -> Result<liquid::Value, failure::Error> {
+        let f = fs::File::open(path)?;
+        serde_yaml::from_reader(f).map_err(|e| e.into())
+    }
+
+    #[cfg(not(feature = "serde_yaml"))]
+    pub fn load_yaml(_path: &path::Path) -> Result<liquid::Value, failure::Error> {
+        bail!("yaml is unsupported");
+    }
+
+    #[cfg(feature = "serde_json")]
+    pub fn load_json(path: &path::Path) -> Result<liquid::Value, failure::Error> {
+        let f = fs::File::open(path)?;
+        serde_json::from_reader(f).map_err(|e| e.into())
+    }
+
+    #[cfg(not(feature = "serde_json"))]
+    pub fn load_json(_path: &path::Path) -> Result<liquid::Value, failure::Error> {
+        bail!("json is unsupported");
+    }
+
+    #[cfg(feature = "toml")]
+    pub fn load_toml(path: &path::Path) -> Result<liquid::Value, failure::Error> {
+        let mut f = fs::File::open(path)?;
+        let mut text = String::new();
+        f.read_to_string(&mut text)?;
+        toml::from_str(&text).map_err(|e| e.into())
+    }
+
+    #[cfg(not(feature = "toml"))]
+    pub fn load_toml(_path: &path::Path) -> Result<liquid::Value, failure::Error> {
+        bail!("toml is unsupported");
+    }
+
+    pub fn insert(
+        object: &mut liquid::Object,
+        path: &[String],
+        key: String,
+        value: liquid::Value,
+    ) -> Result<(), failure::Error> {
+        let leaf = path.iter().cloned().fold(Ok(object), |object, key| {
+            let cur_object = object?;
+            cur_object
+                .entry(key)
+                .or_insert_with(|| liquid::Value::Object(liquid::Object::new()))
+                .as_object_mut()
+                .ok_or_else(|| {
+                    failure::Context::new(format!(
+                        "Aborting: Duplicate in data tree. Would overwrite {:?} ",
+                        path
+                    ))
+                })
+        })?;
+
+        match leaf.insert(key, value) {
+            None => Ok(()),
+            _ => bail!(
+                "The data from {:?} can't be loaded: the key already exists",
+                path
+            ),
+        }
+    }
+}
+
+fn load_data(path: &path::Path) -> Result<liquid::Value, failure::Error> {
+    let extension = path.extension().unwrap_or_default();
+    let value = if extension == ffi::OsStr::new("yaml") {
+        object::load_yaml(path)
+    } else if extension == ffi::OsStr::new("toml") {
+        object::load_toml(path)
+    } else if extension == ffi::OsStr::new("json") {
+        object::load_json(path)
+    } else {
+        bail!("Unsupported file type");
+    }?;
+
+    Ok(value)
+}
+
+fn load_data_dirs(roots: &[path::PathBuf]) -> Result<liquid::Object, failure::Error> {
+    let mut object = liquid::Object::new();
+    // TODO(epage): swap out globwalk for something that uses gitignore so we can have
+    // exclusion support.
+    let patterns = [
+        #[cfg(feature = "serde_yaml")]
+        "*.yaml",
+        #[cfg(feature = "serde_json")]
+        "*.json",
+        #[cfg(feature = "toml")]
+        "*.toml",
+    ];
+    for root in roots {
+        for entry in globwalk::GlobWalker::from_patterns(&patterns, root)? {
+            let entry = entry?;
+            let data_file = entry.path();
+            let data = load_data(data_file)?;
+            let rel_source = data_file.strip_prefix(&root)?;
+            let path = rel_source.parent().unwrap_or_else(|| path::Path::new(""));
+            let path: Option<Vec<_>> = path.components()
+                .map(|c| {
+                    let c: &ffi::OsStr = c.as_ref();
+                    c.to_str().map(String::from)
+                })
+                .collect();
+            let path = match path {
+                Some(p) => p,
+                None => {
+                    warn!("Invalid data file path: {:?}", rel_source);
+                    continue;
+                }
+            };
+            let key = match rel_source
+                .file_name()
+                .expect("file name to exist due to globwalk")
+                .to_str()
+                .map(String::from)
+            {
+                Some(p) => p,
+                None => {
+                    warn!("Invalid data file path: {:?}", rel_source);
+                    continue;
+                }
+            };
+            object::insert(&mut object, &path, key, data)?;
+        }
+    }
+
+    Ok(object)
+}
+
 #[derive(StructOpt, Debug)]
 #[structopt(name = "staging")]
 struct Arguments {
-    #[structopt(short = "i", long = "input", name = "STAGE")] input: String,
-    #[structopt(short = "o", long = "output", name = "DIR")] output: String,
-    #[structopt(short = "n", long = "dry-run")] dry_run: bool,
-    #[structopt(short = "v", long = "verbose", parse(from_occurrences))] verbosity: u8,
+    #[structopt(short = "i", long = "input", name = "STAGE", parse(from_os_str))]
+    input_stage: path::PathBuf,
+    #[structopt(short = "d", long = "data", name = "DATA_DIR", parse(from_os_str))]
+    data_dir: Vec<path::PathBuf>,
+    #[structopt(short = "o", long = "output", name = "OUT_DIR", parse(from_os_str))]
+    output_dir: path::PathBuf,
+    #[structopt(short = "n", long = "dry-run")]
+    dry_run: bool,
+    #[structopt(short = "v", long = "verbose", parse(from_occurrences))]
+    verbosity: u8,
 }
 
 fn run() -> Result<exitcode::ExitCode, failure::Error> {
@@ -113,18 +262,13 @@ fn run() -> Result<exitcode::ExitCode, failure::Error> {
     }
     builder.init();
 
-    let staging = load_stage(path::Path::new(&args.input))
-        .with_context(|_| format!("Failed to load {:?}", args.input))?;
-    let output_root = path::PathBuf::from(args.output);
+    let data = load_data_dirs(&args.data_dir)?;
+    let engine = stager::de::TemplateEngine::new(data)?;
 
-    let staging: Result<Vec<_>, _> = staging
-        .into_iter()
-        .map(|(target, sources)| {
-            let sources: Vec<stager::de::Source> = sources;
-            let sources: Result<Vec<_>, _> = sources.into_iter().map(|s| s.format()).collect();
-            sources.map(|s| (target, s))
-        })
-        .collect();
+    let staging = load_stage(&args.input_stage)
+        .with_context(|_| format!("Failed to load {:?}", args.input_stage))?;
+
+    let staging = staging.format(&engine);
     // TODO(epage): Show all errors, not just first
     let staging = match staging {
         Ok(s) => s,
@@ -137,7 +281,7 @@ fn run() -> Result<exitcode::ExitCode, failure::Error> {
     let staging: Result<Vec<_>, _> = staging
         .into_iter()
         .map(|(target, sources)| {
-            let target = output_root.join(target);
+            let target = args.output_dir.join(target);
             let sources: Vec<Box<stager::builder::ActionBuilder>> = sources;
             let sources: Result<Vec<_>, _> =
                 sources.into_iter().map(|s| s.build(&target)).collect();
@@ -173,7 +317,7 @@ fn main() {
     let code = match run() {
         Ok(e) => e,
         Err(ref e) => {
-            write!(&mut io::stderr(), "{}\n", e).expect("writing to stderr won't fail");
+            writeln!(&mut io::stderr(), "{}", e).expect("writing to stderr won't fail");
             exitcode::SOFTWARE
         }
     };
