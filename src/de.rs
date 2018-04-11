@@ -6,12 +6,17 @@ use liquid;
 
 use builder;
 
+/// Translate user-facing configuration to the staging APIs.
 pub trait Render {
     type Rendered;
 
     fn format(&self, engine: &TemplateEngine) -> Result<Self::Rendered, failure::Error>;
 }
 
+/// For each stage target, a list of sources to populate it with.
+///
+/// The target is an absolute path, treating the stage as the root.  The target supports template
+/// formatting.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Staging(BTreeMap<Template, Vec<Source>>);
 
@@ -22,7 +27,7 @@ impl Render for Staging {
         let staging: Result<BTreeMap<_, _>, _> = self.0
             .iter()
             .map(|(target, sources)| {
-                let target = path::PathBuf::from(target.format(engine)?);
+                let target = abs_to_rel(&target.format(engine)?)?;
                 let sources: &Vec<Source> = sources;
                 let sources: Result<Vec<_>, _> =
                     sources.into_iter().map(|s| s.format(engine)).collect();
@@ -270,5 +275,79 @@ impl Render for Template {
 
     fn format(&self, engine: &TemplateEngine) -> Result<String, failure::Error> {
         engine.render(&self.0)
+    }
+}
+
+fn abs_to_rel(abs: &str) -> Result<path::PathBuf, failure::Error> {
+    if !abs.starts_with('/') {
+        bail!("Path is not absolute (within the state): {}", abs);
+    }
+
+    let rel = abs.trim_left_matches('/');
+    let mut path = path::PathBuf::new();
+    for part in rel.split('/').filter(|s| !s.is_empty() && *s != ".") {
+        if part == ".." {
+            if !path.pop() {
+                bail!("Path is outside of staging root: {:?}", abs);
+            }
+        } else {
+            path.push(part);
+        }
+    }
+    Ok(path)
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn abs_to_rel_errors_on_rel() {
+        assert!(abs_to_rel("./hello/world").is_err());
+        assert!(abs_to_rel("hello/world").is_err());
+    }
+
+    #[test]
+    fn abs_to_rel_reformats() {
+        assert_eq!(
+            abs_to_rel("/hello/world").unwrap(),
+            path::PathBuf::from("hello/world")
+        );
+    }
+
+    #[test]
+    fn abs_to_rel_cleans_nop() {
+        assert_eq!(
+            abs_to_rel("/hello//world").unwrap(),
+            path::PathBuf::from("hello/world")
+        );
+        assert_eq!(
+            abs_to_rel("/hello/./world").unwrap(),
+            path::PathBuf::from("hello/world")
+        );
+    }
+
+    #[test]
+    fn abs_to_rel_cleans_up_root() {
+        assert_eq!(
+            abs_to_rel("/hello/../goodbye/world").unwrap(),
+            path::PathBuf::from("goodbye/world")
+        );
+    }
+
+    #[test]
+    fn abs_to_rel_cleans_repeated_ups() {
+        assert_eq!(
+            abs_to_rel("/hello/world/../../foo/bar").unwrap(),
+            path::PathBuf::from("foo/bar")
+        );
+    }
+
+    #[test]
+    fn abs_to_rel_cleans_up_leaf() {
+        assert_eq!(
+            abs_to_rel("/hello/world/foo/bar/../..").unwrap(),
+            path::PathBuf::from("hello/world")
+        );
     }
 }
