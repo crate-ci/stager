@@ -53,10 +53,21 @@ pub struct SourceFile {
 impl ActionBuilder for SourceFile {
     fn build(&self, target_dir: &path::Path) -> Result<Vec<Box<action::Action>>, failure::Error> {
         let path = self.path.as_path();
+        if !path.is_absolute() {
+            bail!("SourceFile path must be absolute: {:?}", path);
+        }
+
         let filename = self.rename
             .as_ref()
             .map(|n| ffi::OsStr::new(n))
             .unwrap_or_else(|| path.file_name().unwrap_or_default());
+        let filename = path::Path::new(filename);
+        if filename.file_name() != Some(filename.as_os_str()) {
+            bail!(
+                "SourceFile rename must not change directories: {:?}",
+                filename
+            );
+        }
         let copy_target = target_dir.join(filename);
         let copy: Box<action::Action> = Box::new(action::CopyFile::new(&copy_target, path));
 
@@ -67,6 +78,11 @@ impl ActionBuilder for SourceFile {
             a
         }));
         actions.extend(self.symlink.iter().map(|s| {
+            let s = path::Path::new(s);
+            // TODO(epage): Re-enable this error check
+            //if s.file_name() != Some(s.as_os_str()) {
+            //    bail!("SourceFile symlink must not change directories: {:?}", s);
+            //}
             let sym_target = target_dir.join(s);
             let a: Box<action::Action> = Box::new(action::Symlink::new(sym_target, &copy_target));
             a
@@ -95,6 +111,9 @@ impl ActionBuilder for SourceFiles {
         // TODO(epage): swap out globwalk for something that uses gitignore so we can have
         // exclusion support.
         let source_root = self.path.as_path();
+        if !source_root.is_absolute() {
+            bail!("SourceFiles path must be absolute: {:?}", source_root);
+        }
         for entry in globwalk::GlobWalker::from_patterns(&self.pattern, source_root)?
             .follow_links(self.follow_links)
         {
@@ -139,7 +158,11 @@ pub struct Symlink {
 impl ActionBuilder for Symlink {
     fn build(&self, target_dir: &path::Path) -> Result<Vec<Box<action::Action>>, failure::Error> {
         let target = self.target.as_path();
-        let staged = target_dir.join(&self.rename);
+        let rename = path::Path::new(&self.rename);
+        if rename.file_name() != Some(rename.as_os_str()) {
+            bail!("Symlink rename must not change directories: {:?}", rename);
+        }
+        let staged = target_dir.join(rename);
         let link: Box<action::Action> = Box::new(action::Symlink::new(&staged, target));
 
         let mut actions = vec![link];
