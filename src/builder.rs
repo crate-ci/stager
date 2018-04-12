@@ -102,6 +102,12 @@ pub struct SourceFiles {
     /// Specifies the pattern for executing the recursive/multifile match.
     pub pattern: Vec<String>,
     pub follow_links: bool,
+    /// Toggles whether no results for the pattern constitutes an error.
+    ///
+    /// Generally, the default of `false` is best because it makes mistakes more obvious.  An
+    /// example of when no results are acceptable is a default staging configuration that
+    /// implements a lot of default "good enough" policy.
+    pub allow_empty: bool,
     pub access: Vec<Access>,
 }
 
@@ -133,11 +139,18 @@ impl ActionBuilder for SourceFiles {
         }
 
         if actions.is_empty() {
-            bail!(
-                "No files found under {:?} with patterns {:?}",
-                self.path,
-                self.pattern
-            );
+            if self.allow_empty {
+                info!(
+                    "No files found under {:?} with patterns {:?}",
+                    self.path, self.pattern
+                );
+            } else {
+                bail!(
+                    "No files found under {:?} with patterns {:?}",
+                    self.path,
+                    self.pattern
+                );
+            }
         }
 
         Ok(actions)
