@@ -5,6 +5,8 @@ extern crate failure;
 extern crate globwalk;
 #[cfg(feature = "de")]
 extern crate liquid;
+#[macro_use]
+extern crate log;
 #[cfg(feature = "de")]
 #[macro_use]
 extern crate serde;

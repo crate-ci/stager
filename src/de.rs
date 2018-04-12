@@ -137,6 +137,13 @@ pub struct SourceFiles {
     pattern: OneOrMany<Template>,
     #[serde(default)]
     follow_links: bool,
+    /// Toggles whether no results for the pattern constitutes an error.
+    ///
+    /// Generally, the default of `false` is best because it makes mistakes more obvious.  An
+    /// example of when no results are acceptable is a default staging configuration that
+    /// implements a lot of default "good enough" policy.
+    #[serde(default)]
+    allow_empty: bool,
     #[serde(default)]
     access: Option<OneOrMany<Access>>,
 }
@@ -155,6 +162,7 @@ impl Render for SourceFiles {
             path: path::PathBuf::from(self.path.format(engine)?),
             pattern,
             follow_links: self.follow_links,
+            allow_empty: self.allow_empty,
             access,
         };
         Ok(value)
