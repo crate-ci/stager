@@ -13,7 +13,7 @@
 Add to your `Cargo.toml`:
 
 ```toml
-[dev-dependencies]
+[dependencies]
 stager = "0.2"
 ```
 
