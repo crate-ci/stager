@@ -1,3 +1,5 @@
+//! High-level requirements for staging files.
+
 use std::collections::BTreeMap;
 use std::ffi;
 use std::path;

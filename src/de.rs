@@ -1,3 +1,5 @@
+//! Composable file format for staging files.
+
 use std::collections::BTreeMap;
 use std::path;
 

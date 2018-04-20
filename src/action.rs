@@ -1,3 +1,5 @@
+//! Filesystem operations to stage files.
+
 use std::fmt;
 use std::fs;
 use std::path;
