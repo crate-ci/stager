@@ -96,10 +96,14 @@ impl ActionBuilder for SourceFile {
 /// Specifies a collection of files to be staged into the target directory.
 #[derive(Clone, Debug)]
 pub struct SourceFiles {
-    ///  Specifies the root path that `patterns` will be run on to identify files to be copied into
+    ///  Specifies the root path that `pattern` will be run on to identify files to be copied into
     ///  the target directory.
     pub path: path::PathBuf,
-    /// Specifies the pattern for executing the recursive/multifile match.
+    /// Specifies the `pattern` for executing the recursive/multifile match.
+    ///
+    /// `pattern` uses [gitignore][gitignore] syntax.
+    ///
+    /// [gitignore]: https://git-scm.com/docs/gitignore#_pattern_format
     pub pattern: Vec<String>,
     pub follow_links: bool,
     /// Toggles whether no results for the pattern constitutes an error.
@@ -114,13 +118,11 @@ pub struct SourceFiles {
 impl ActionBuilder for SourceFiles {
     fn build(&self, target_dir: &path::Path) -> Result<Vec<Box<action::Action>>, failure::Error> {
         let mut actions: Vec<Box<action::Action>> = Vec::new();
-        // TODO(epage): swap out globwalk for something that uses gitignore so we can have
-        // exclusion support.
         let source_root = self.path.as_path();
         if !source_root.is_absolute() {
             bail!("SourceFiles path must be absolute: {:?}", source_root);
         }
-        for entry in globwalk::GlobWalker::from_patterns(&self.pattern, source_root)?
+        for entry in globwalk::GlobWalker::from_patterns(source_root, &self.pattern)?
             .follow_links(self.follow_links)
         {
             let entry = entry?;
