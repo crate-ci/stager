@@ -22,3 +22,5 @@ pub mod action;
 pub mod builder;
 #[cfg(feature = "de")]
 pub mod de;
+
+mod error;

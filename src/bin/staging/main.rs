@@ -270,7 +270,6 @@ fn run() -> Result<exitcode::ExitCode, failure::Error> {
         .with_context(|_| format!("Failed to load {:?}", args.input_stage))?;
 
     let staging = staging.format(&engine);
-    // TODO(epage): Show all errors, not just first
     let staging = match staging {
         Ok(s) => s,
         Err(e) => {
@@ -280,7 +279,6 @@ fn run() -> Result<exitcode::ExitCode, failure::Error> {
     };
 
     let staging = staging.build(&args.output_dir);
-    // TODO(epage): Show all errors, not just first
     let staging = match staging {
         Ok(s) => s,
         Err(e) => {

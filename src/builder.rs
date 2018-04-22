@@ -9,6 +9,7 @@ use failure;
 use globwalk;
 
 use action;
+use error;
 
 pub trait ActionBuilder {
     // TODO(epage):
@@ -30,10 +31,14 @@ impl ActionBuilder for Staging {
                     bail!("target must be relative to the stage root: {:?}", target);
                 }
                 let target = target_dir.join(target);
-                let sources: &Vec<Box<ActionBuilder>> = sources;
-                let sources: Result<Vec<_>, _> =
-                    sources.into_iter().map(|s| s.build(&target)).collect();
-                sources
+                let mut errors = error::Errors::new();
+                let sources = {
+                    let sources = sources.into_iter().map(|s| s.build(&target));
+                    let sources = error::ErrorPartition::new(sources, &mut errors);
+                    let sources: Vec<_> = sources.collect();
+                    sources
+                };
+                errors.ok(sources)
             })
             .collect();
         let staging = staging?;
