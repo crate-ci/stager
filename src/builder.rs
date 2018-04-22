@@ -2,19 +2,62 @@
 
 use std::collections::BTreeMap;
 use std::ffi;
+use std::iter;
 use std::path;
 
 use failure;
 use globwalk;
 
 use action;
-
-pub type Staging = BTreeMap<path::PathBuf, Vec<Box<ActionBuilder>>>;
+use error;
 
 pub trait ActionBuilder {
     // TODO(epage):
     // - Change to `Iterator`.
     fn build(&self, target_dir: &path::Path) -> Result<Vec<Box<action::Action>>, failure::Error>;
+}
+
+/// For each stage target, a list of sources to populate it with.
+///
+/// The target is a path relative to the stage root.
+pub struct Staging(BTreeMap<path::PathBuf, Vec<Box<ActionBuilder>>>);
+
+impl ActionBuilder for Staging {
+    fn build(&self, target_dir: &path::Path) -> Result<Vec<Box<action::Action>>, failure::Error> {
+        let staging: Result<Vec<_>, _> = self.0
+            .iter()
+            .map(|(target, sources)| {
+                if target.is_absolute() {
+                    bail!("target must be relative to the stage root: {:?}", target);
+                }
+                let target = target_dir.join(target);
+                let mut errors = error::Errors::new();
+                let sources = {
+                    let sources = sources.into_iter().map(|s| s.build(&target));
+                    let sources = error::ErrorPartition::new(sources, &mut errors);
+                    let sources: Vec<_> = sources.collect();
+                    sources
+                };
+                errors.ok(sources)
+            })
+            .collect();
+        let staging = staging?;
+        let staging: Vec<_> = staging
+            .into_iter()
+            .flat_map(|v| v.into_iter().flat_map(|v: Vec<_>| v.into_iter()))
+            .collect();
+        Ok(staging)
+    }
+}
+
+impl iter::FromIterator<(path::PathBuf, Vec<Box<ActionBuilder>>)> for Staging {
+    fn from_iter<I>(iter: I) -> Self
+    where
+        I: IntoIterator<Item = (path::PathBuf, Vec<Box<ActionBuilder>>)>,
+    {
+        let staging = iter.into_iter().collect();
+        Self { 0: staging }
+    }
 }
 
 /// Override the default settings for the target directory.

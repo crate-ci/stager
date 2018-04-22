@@ -7,6 +7,7 @@ use failure;
 use liquid;
 
 use builder;
+use error;
 
 /// Translate user-facing configuration to the staging APIs.
 pub trait Render {
@@ -26,17 +27,26 @@ impl Render for Staging {
     type Rendered = builder::Staging;
 
     fn format(&self, engine: &TemplateEngine) -> Result<builder::Staging, failure::Error> {
-        let staging: Result<BTreeMap<_, _>, _> = self.0
-            .iter()
-            .map(|(target, sources)| {
-                let target = abs_to_rel(&target.format(engine)?)?;
-                let sources: &Vec<Source> = sources;
-                let sources: Result<Vec<_>, _> =
-                    sources.into_iter().map(|s| s.format(engine)).collect();
-                sources.map(|s| (target, s))
-            })
-            .collect();
-        staging
+        let iter = self.0.iter().map(|(target, sources)| {
+            let target = abs_to_rel(&target.format(engine)?)?;
+            let sources: &Vec<Source> = sources;
+            let mut errors = error::Errors::new();
+            let sources = {
+                let sources = sources.into_iter().map(|s| s.format(engine));
+                let sources = error::ErrorPartition::new(sources, &mut errors);
+                let sources: Vec<_> = sources.collect();
+                sources
+            };
+            errors.ok((target, sources))
+        });
+        let mut errors = error::Errors::new();
+        let staging = {
+            let iter = error::ErrorPartition::new(iter, &mut errors);
+            let staging: builder::Staging = iter.collect();
+            staging
+        };
+
+        errors.ok(staging)
     }
 }
 

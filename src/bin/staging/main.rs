@@ -31,6 +31,7 @@ use failure::ResultExt;
 use structopt::StructOpt;
 
 use stager::de::Render;
+use stager::builder::ActionBuilder;
 
 mod stage {
     use super::*;
@@ -269,7 +270,6 @@ fn run() -> Result<exitcode::ExitCode, failure::Error> {
         .with_context(|_| format!("Failed to load {:?}", args.input_stage))?;
 
     let staging = staging.format(&engine);
-    // TODO(epage): Show all errors, not just first
     let staging = match staging {
         Ok(s) => s,
         Err(e) => {
@@ -278,22 +278,7 @@ fn run() -> Result<exitcode::ExitCode, failure::Error> {
         }
     };
 
-    // TODO(epage): Move this logic to `stager::builder` for reuse.
-    let staging: Result<Vec<_>, _> = staging
-        .into_iter()
-        .map(|(target, sources)| {
-            if target.is_absolute() {
-                // This should already be enforced by `stager::de`.
-                bail!("target must be relative to the stage root: {:?}", target);
-            }
-            let target = args.output_dir.join(target);
-            let sources: Vec<Box<stager::builder::ActionBuilder>> = sources;
-            let sources: Result<Vec<_>, _> =
-                sources.into_iter().map(|s| s.build(&target)).collect();
-            sources
-        })
-        .collect();
-    // TODO(epage): Show all errors, not just first
+    let staging = staging.build(&args.output_dir);
     let staging = match staging {
         Ok(s) => s,
         Err(e) => {
@@ -301,10 +286,6 @@ fn run() -> Result<exitcode::ExitCode, failure::Error> {
             return Ok(exitcode::IOERR);
         }
     };
-    let staging: Vec<_> = staging
-        .into_iter()
-        .flat_map(|v| v.into_iter().flat_map(|v| v.into_iter()))
-        .collect();
 
     for action in staging {
         debug!("{}", action);
