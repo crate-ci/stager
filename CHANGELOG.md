@@ -1,3 +1,22 @@
+<a name="0.3.0"></a>
+## 0.3.0 (2018-04-22)
+
+
+#### Features
+
+*   Exclusion support for SourceFiles ([8f3df7aa](https://github.com/crate-ci/stager/commit/8f3df7aa52dbe568a4205a6bc88930f02d217a4c), closes [#9](https://github.com/crate-ci/stager/issues/9))
+
+#### Bug Fixes
+
+*   Report all errors ([7943d0fc](https://github.com/crate-ci/stager/commit/7943d0fc99df90f7e45e12b9cde1a278229e5ab3), closes [#3](https://github.com/crate-ci/stager/issues/3), breaks [#](https://github.com/crate-ci/stager/issues/))
+* **README:**  Bad links from copy pasta ([13a949a5](https://github.com/crate-ci/stager/commit/13a949a580df9cd536224d006c54a6389c8f9908))
+
+#### Breaking Changes
+
+*   Report all errors ([7943d0fc](https://github.com/crate-ci/stager/commit/7943d0fc99df90f7e45e12b9cde1a278229e5ab3), closes [#3](https://github.com/crate-ci/stager/issues/3))
+
+
+
 <a name="0.2.0"></a>
 ## 0.2.0 (2018-04-12)
 

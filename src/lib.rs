@@ -1,8 +1,8 @@
 //! **stager** - This crate stages files for packaging
 //!
 //! ```toml
-//! [dev-dependencies]
-//! stager = "0.2"
+//! [dependencies]
+//! stager = "0.3"
 //! ```
 
 #![warn(warnings)]

@@ -14,7 +14,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-stager = "0.2"
+stager = "0.3"
 ```
 
 ## License
