@@ -26,7 +26,7 @@ impl Render for Staging {
     type Rendered = builder::Staging;
 
     fn format(&self, engine: &TemplateEngine) -> Result<builder::Staging, failure::Error> {
-        let staging: Result<BTreeMap<_, _>, _> = self.0
+        let staging: Result<builder::Staging, _> = self.0
             .iter()
             .map(|(target, sources)| {
                 let target = abs_to_rel(&target.format(engine)?)?;
