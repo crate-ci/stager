@@ -172,6 +172,9 @@ impl ActionBuilder for SourceFiles {
         {
             let entry = entry?;
             let source_file = entry.path();
+            if source_file.is_dir() {
+                continue;
+            }
             let rel_source = source_file.strip_prefix(source_root)?;
             let copy_target = target_dir.join(rel_source);
             let copy: Box<action::Action> =
