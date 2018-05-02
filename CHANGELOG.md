@@ -1,3 +1,13 @@
+<a name="0.3.1"></a>
+## 0.3.1 (2018-05-02)
+
+
+#### Bug Fixes
+
+* **SourceFiles:**  Do not return directories ([a608a05b](https://github.com/crate-ci/stager/commit/a608a05bd032e56bc2ad4ee5e56b542aa21abdfe))
+
+
+
 <a name="0.3.0"></a>
 ## 0.3.0 (2018-04-22)
 
