@@ -1,3 +1,13 @@
+<a name="0.3.2"></a>
+## 0.3.2 (2018-05-02)
+
+
+#### Features
+
+*   Implement basic traits ([624b4636](https://github.com/crate-ci/stager/commit/624b4636ec3f435de06cfbc6b9241f80bba5a750))
+
+
+
 <a name="0.3.1"></a>
 ## 0.3.1 (2018-05-02)
 
