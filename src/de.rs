@@ -290,6 +290,15 @@ impl TemplateEngine {
 #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
 pub struct Template(String);
 
+impl Template {
+    pub fn new<S>(s: S) -> Self
+    where
+        S: Into<String>,
+    {
+        Self { 0: s.into() }
+    }
+}
+
 impl Render for Template {
     type Rendered = String;
 
