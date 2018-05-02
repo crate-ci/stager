@@ -20,6 +20,7 @@ pub trait ActionBuilder {
 /// For each stage target, a list of sources to populate it with.
 ///
 /// The target is a path relative to the stage root.
+#[derive(Default)]
 pub struct Staging(BTreeMap<path::PathBuf, Vec<Box<ActionBuilder>>>);
 
 impl ActionBuilder for Staging {

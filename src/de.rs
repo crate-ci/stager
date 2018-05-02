@@ -20,7 +20,7 @@ pub trait Render {
 ///
 /// The target is an absolute path, treating the stage as the root.  The target supports template
 /// formatting.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Default, Serialize, Deserialize)]
 pub struct Staging(BTreeMap<Template, Vec<Source>>);
 
 impl Render for Staging {
@@ -50,7 +50,7 @@ impl Render for Staging {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum Source {
     Directory(Directory),
@@ -77,7 +77,7 @@ impl Render for Source {
 }
 
 /// Override the default settings for the target directory.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Directory {
     access: OneOrMany<Access>,
@@ -94,7 +94,7 @@ impl Render for Directory {
 }
 
 /// Specifies a file to be staged into the target directory.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SourceFile {
     ///  Specifies the full path of the file to be copied into the target directory
@@ -139,7 +139,7 @@ impl Render for SourceFile {
 }
 
 /// Specifies a collection of files to be staged into the target directory.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SourceFiles {
     ///  Specifies the root path that `patterns` will be run on to identify files to be copied into
@@ -182,7 +182,7 @@ impl Render for SourceFiles {
 }
 
 /// Specifies a symbolic link file to be staged into the target directory.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Symlink {
     /// The literal path for the target to point to.
@@ -212,7 +212,7 @@ impl Render for Symlink {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Access {
     /// Specifies  permissions to be applied to the file.
@@ -230,7 +230,7 @@ impl Render for Access {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum OneOrMany<T> {
     One(T),
