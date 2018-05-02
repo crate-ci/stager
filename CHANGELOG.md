@@ -1,3 +1,13 @@
+<a name="0.3.3"></a>
+## 0.3.3 (2018-05-02)
+
+
+#### Features
+
+* **API:**  Expose Template ([68cd942f](https://github.com/crate-ci/stager/commit/68cd942f5ddbcdc8e5359134feca191f30c8c173))
+
+
+
 <a name="0.3.2"></a>
 ## 0.3.2 (2018-05-02)
 
