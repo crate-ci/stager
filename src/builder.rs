@@ -1,4 +1,16 @@
 //! High-level requirements for staging files.
+//!
+//! ## Basic Example
+//!
+//! ```rust
+//! use std::path;
+//! use stager::builder;
+//! use stager::builder::ActionBuilder;
+//!
+//! let target = path::Path::new("/tmp/example"); // dummy data
+//! let stage = builder::Staging::default(); // dummy data
+//! let stage = stage.build(target).unwrap();
+//! ```
 
 use std::collections::BTreeMap;
 use std::ffi;
