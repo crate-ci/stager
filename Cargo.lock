@@ -400,7 +400,7 @@ dependencies = [
 
 [[package]]
 name = "stager"
-version = "0.3.3"
+version = "0.3.4"
 dependencies = [
  "env_logger 0.5.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "exitcode 1.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
