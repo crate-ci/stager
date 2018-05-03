@@ -1,4 +1,31 @@
 //! Composable file format for staging files.
+//!
+//! `stager::de::Staging` is the recommended top-level staging configuration to include in a
+//! packaging configuration struct.  If you need additional sources, you might want to consider
+//! replacing `Staging` and `Source`, reusing the rest.
+//!
+//! `Template` fields are rendered using the [liquid][liquid] template engine. No filters or tags
+//! are available at this time.
+//!
+//! [liquid]: https://shopify.github.io/liquid/
+//!
+//! ## Basic Example
+//!
+//! ```rust
+//! use std::path;
+//! use stager::de;
+//! use stager::de::Render;
+//!
+//! // #[derive(Serialize, Deserialize)]
+//! #[derive(Default)]
+//! struct Config {
+//!     stage: de::Staging,
+//! }
+//! // ...
+//! let engine = de::TemplateEngine::new(Default::default()).unwrap();
+//! let config = Config::default();  // Dummy data
+//! let stage = config.stage.format(&engine);
+//! ```
 
 use std::collections::BTreeMap;
 use std::path;
