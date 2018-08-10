@@ -80,7 +80,6 @@ impl Render for Staging {
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum Source {
-    Directory(Directory),
     SourceFile(SourceFile),
     SourceFiles(SourceFiles),
     Symlink(Symlink),
@@ -94,28 +93,10 @@ impl Render for Source {
         engine: &TemplateEngine,
     ) -> Result<Box<builder::ActionBuilder>, failure::Error> {
         let value: Box<builder::ActionBuilder> = match *self {
-            Source::Directory(ref b) => Box::new(b.format(engine)?),
             Source::SourceFile(ref b) => Box::new(b.format(engine)?),
             Source::SourceFiles(ref b) => Box::new(b.format(engine)?),
             Source::Symlink(ref b) => Box::new(b.format(engine)?),
         };
-        Ok(value)
-    }
-}
-
-/// Override the default settings for the target directory.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Directory {
-    access: OneOrMany<Access>,
-}
-
-impl Render for Directory {
-    type Rendered = builder::Directory;
-
-    fn format(&self, engine: &TemplateEngine) -> Result<builder::Directory, failure::Error> {
-        let access = self.access.format(engine)?;
-        let value = builder::Directory { access };
         Ok(value)
     }
 }
@@ -130,23 +111,15 @@ pub struct SourceFile {
     /// Default is the filename of the source file.
     #[serde(default)]
     rename: Option<Template>,
-    /// Specifies symbolic links to `rename` in the same target directory and using the same
-    /// `access`.
+    /// Specifies symbolic links to `rename` in the same target directory.
     #[serde(default)]
     symlink: Option<OneOrMany<Template>>,
-    #[serde(default)]
-    access: Option<OneOrMany<Access>>,
 }
 
 impl Render for SourceFile {
     type Rendered = builder::SourceFile;
 
     fn format(&self, engine: &TemplateEngine) -> Result<builder::SourceFile, failure::Error> {
-        let access = self.access
-            .as_ref()
-            .map(|a| a.format(engine))
-            .map_or(Ok(None), |r| r.map(Some))?
-            .unwrap_or_default();
         let symlink = self.symlink
             .as_ref()
             .map(|a| a.format(engine))
@@ -159,7 +132,6 @@ impl Render for SourceFile {
                 .map(|t| t.format(engine))
                 .map_or(Ok(None), |r| r.map(Some))?,
             symlink,
-            access,
         };
         Ok(value)
     }
@@ -183,8 +155,6 @@ pub struct SourceFiles {
     /// implements a lot of default "good enough" policy.
     #[serde(default)]
     allow_empty: bool,
-    #[serde(default)]
-    access: Option<OneOrMany<Access>>,
 }
 
 impl Render for SourceFiles {
@@ -192,17 +162,11 @@ impl Render for SourceFiles {
 
     fn format(&self, engine: &TemplateEngine) -> Result<builder::SourceFiles, failure::Error> {
         let pattern = self.pattern.format(engine)?;
-        let access = self.access
-            .as_ref()
-            .map(|a| a.format(engine))
-            .map_or(Ok(None), |r| r.map(Some))?
-            .unwrap_or_default();
         let value = builder::SourceFiles {
             path: path::PathBuf::from(self.path.format(engine)?),
             pattern,
             follow_links: self.follow_links,
             allow_empty: self.allow_empty,
-            access,
         };
         Ok(value)
     }
@@ -217,41 +181,15 @@ pub struct Symlink {
     /// Specifies the name the symlink should be given.
     /// Default is the filename of the `target`.
     rename: Template,
-    #[serde(default)]
-    access: Option<OneOrMany<Access>>,
 }
 
 impl Render for Symlink {
     type Rendered = builder::Symlink;
 
     fn format(&self, engine: &TemplateEngine) -> Result<builder::Symlink, failure::Error> {
-        let access = self.access
-            .as_ref()
-            .map(|a| a.format(engine))
-            .map_or(Ok(None), |r| r.map(Some))?
-            .unwrap_or_default();
         let value = builder::Symlink {
             target: path::PathBuf::from(self.target.format(engine)?),
             rename: self.rename.format(engine)?,
-            access,
-        };
-        Ok(value)
-    }
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Access {
-    /// Specifies  permissions to be applied to the file.
-    op: String,
-}
-
-impl Render for Access {
-    type Rendered = builder::Access;
-
-    fn format(&self, _engine: &TemplateEngine) -> Result<builder::Access, failure::Error> {
-        let value = builder::Access {
-            op: self.op.clone(),
         };
         Ok(value)
     }
