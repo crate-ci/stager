@@ -38,9 +38,10 @@ use error;
 
 /// Translate user-facing configuration to the staging APIs.
 pub trait ActionRender {
-    type Rendered: builder::ActionBuilder;
-
-    fn format(&self, engine: &TemplateEngine) -> Result<Self::Rendered, failure::Error>;
+    fn format(
+        &self,
+        engine: &TemplateEngine,
+    ) -> Result<Box<builder::ActionBuilder>, failure::Error>;
 }
 
 /// For each stage target, a list of sources to populate it with.
@@ -76,11 +77,12 @@ impl Staging {
 }
 
 impl ActionRender for Staging {
-    type Rendered = Box<builder::ActionBuilder>;
-
-    fn format(&self, engine: &TemplateEngine) -> Result<Self::Rendered, failure::Error> {
+    fn format(
+        &self,
+        engine: &TemplateEngine,
+    ) -> Result<Box<builder::ActionBuilder>, failure::Error> {
         self.format(engine).map(|a| {
-            let a: Self::Rendered = Box::new(a);
+            let a: Box<builder::ActionBuilder> = Box::new(a);
             a
         })
     }
@@ -95,8 +97,6 @@ pub enum Source {
 }
 
 impl ActionRender for Source {
-    type Rendered = Box<builder::ActionBuilder>;
-
     fn format(
         &self,
         engine: &TemplateEngine,
@@ -145,11 +145,12 @@ impl SourceFile {
 }
 
 impl ActionRender for SourceFile {
-    type Rendered = Box<builder::ActionBuilder>;
-
-    fn format(&self, engine: &TemplateEngine) -> Result<Self::Rendered, failure::Error> {
+    fn format(
+        &self,
+        engine: &TemplateEngine,
+    ) -> Result<Box<builder::ActionBuilder>, failure::Error> {
         self.format(engine).map(|a| {
-            let a: Self::Rendered = Box::new(a);
+            let a: Box<builder::ActionBuilder> = Box::new(a);
             a
         })
     }
@@ -189,11 +190,12 @@ impl SourceFiles {
 }
 
 impl ActionRender for SourceFiles {
-    type Rendered = Box<builder::ActionBuilder>;
-
-    fn format(&self, engine: &TemplateEngine) -> Result<Self::Rendered, failure::Error> {
+    fn format(
+        &self,
+        engine: &TemplateEngine,
+    ) -> Result<Box<builder::ActionBuilder>, failure::Error> {
         self.format(engine).map(|a| {
-            let a: Self::Rendered = Box::new(a);
+            let a: Box<builder::ActionBuilder> = Box::new(a);
             a
         })
     }
@@ -221,11 +223,12 @@ impl Symlink {
 }
 
 impl ActionRender for Symlink {
-    type Rendered = Box<builder::ActionBuilder>;
-
-    fn format(&self, engine: &TemplateEngine) -> Result<Self::Rendered, failure::Error> {
+    fn format(
+        &self,
+        engine: &TemplateEngine,
+    ) -> Result<Box<builder::ActionBuilder>, failure::Error> {
         self.format(engine).map(|a| {
-            let a: Self::Rendered = Box::new(a);
+            let a: Box<builder::ActionBuilder> = Box::new(a);
             a
         })
     }
