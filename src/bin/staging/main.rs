@@ -22,16 +22,16 @@ extern crate toml;
 
 use std::ffi;
 use std::fs;
-use std::io::Write;
 use std::io;
+use std::io::Write;
 use std::path;
 use std::process;
 
 use failure::ResultExt;
 use structopt::StructOpt;
 
-use stager::de::Render;
 use stager::builder::ActionBuilder;
+use stager::de::ActionRender;
 
 mod stage {
     use super::*;

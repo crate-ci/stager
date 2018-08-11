@@ -29,6 +29,13 @@ pub trait ActionBuilder {
     fn build(&self, target_dir: &path::Path) -> Result<Vec<Box<action::Action>>, failure::Error>;
 }
 
+impl<A: ActionBuilder + ?Sized> ActionBuilder for Box<A> {
+    fn build(&self, target_dir: &path::Path) -> Result<Vec<Box<action::Action>>, failure::Error> {
+        let target: &A = &self;
+        target.build(target_dir)
+    }
+}
+
 /// For each stage target, a list of sources to populate it with.
 ///
 /// The target is a path relative to the stage root.

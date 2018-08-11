@@ -14,7 +14,7 @@
 //! ```rust
 //! use std::path;
 //! use stager::de;
-//! use stager::de::Render;
+//! use stager::de::ActionRender;
 //!
 //! // #[derive(Serialize, Deserialize)]
 //! #[derive(Default)]
@@ -37,8 +37,8 @@ use builder;
 use error;
 
 /// Translate user-facing configuration to the staging APIs.
-pub trait Render {
-    type Rendered;
+pub trait ActionRender {
+    type Rendered: builder::ActionBuilder;
 
     fn format(&self, engine: &TemplateEngine) -> Result<Self::Rendered, failure::Error>;
 }
@@ -50,7 +50,7 @@ pub trait Render {
 #[derive(Clone, Debug, Eq, PartialEq, Default, Serialize, Deserialize)]
 pub struct Staging(BTreeMap<Template, Vec<Source>>);
 
-impl Render for Staging {
+impl ActionRender for Staging {
     type Rendered = builder::Staging;
 
     fn format(&self, engine: &TemplateEngine) -> Result<builder::Staging, failure::Error> {
@@ -85,7 +85,7 @@ pub enum Source {
     Symlink(Symlink),
 }
 
-impl Render for Source {
+impl ActionRender for Source {
     type Rendered = Box<builder::ActionBuilder>;
 
     fn format(
@@ -116,7 +116,7 @@ pub struct SourceFile {
     symlink: Option<OneOrMany<Template>>,
 }
 
-impl Render for SourceFile {
+impl ActionRender for SourceFile {
     type Rendered = builder::SourceFile;
 
     fn format(&self, engine: &TemplateEngine) -> Result<builder::SourceFile, failure::Error> {
@@ -157,7 +157,7 @@ pub struct SourceFiles {
     allow_empty: bool,
 }
 
-impl Render for SourceFiles {
+impl ActionRender for SourceFiles {
     type Rendered = builder::SourceFiles;
 
     fn format(&self, engine: &TemplateEngine) -> Result<builder::SourceFiles, failure::Error> {
@@ -183,7 +183,7 @@ pub struct Symlink {
     rename: Template,
 }
 
-impl Render for Symlink {
+impl ActionRender for Symlink {
     type Rendered = builder::Symlink;
 
     fn format(&self, engine: &TemplateEngine) -> Result<builder::Symlink, failure::Error> {
@@ -192,33 +192,6 @@ impl Render for Symlink {
             rename: self.rename.format(engine)?,
         };
         Ok(value)
-    }
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum OneOrMany<T> {
-    One(T),
-    Many(Vec<T>),
-}
-
-impl<T> Render for OneOrMany<T>
-where
-    T: Render,
-{
-    type Rendered = Vec<T::Rendered>;
-
-    fn format(&self, engine: &TemplateEngine) -> Result<Self::Rendered, failure::Error> {
-        match *self {
-            OneOrMany::One(ref v) => {
-                let u = v.format(engine)?;
-                Ok(vec![u])
-            }
-            OneOrMany::Many(ref v) => {
-                let u: Result<Vec<_>, _> = v.iter().map(|a| a.format(engine)).collect();
-                u
-            }
-        }
     }
 }
 
@@ -252,6 +225,40 @@ impl TemplateEngine {
     }
 }
 
+/// Translate user-facing value to a staging value.
+pub trait TemplateRender {
+    type Rendered;
+
+    fn format(&self, engine: &TemplateEngine) -> Result<Self::Rendered, failure::Error>;
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum OneOrMany<T> {
+    One(T),
+    Many(Vec<T>),
+}
+
+impl<T> TemplateRender for OneOrMany<T>
+where
+    T: TemplateRender,
+{
+    type Rendered = Vec<T::Rendered>;
+
+    fn format(&self, engine: &TemplateEngine) -> Result<Self::Rendered, failure::Error> {
+        match *self {
+            OneOrMany::One(ref v) => {
+                let u = v.format(engine)?;
+                Ok(vec![u])
+            }
+            OneOrMany::Many(ref v) => {
+                let u: Result<Vec<_>, _> = v.iter().map(|a| a.format(engine)).collect();
+                u
+            }
+        }
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
 pub struct Template(String);
 
@@ -264,7 +271,7 @@ impl Template {
     }
 }
 
-impl Render for Template {
+impl TemplateRender for Template {
     type Rendered = String;
 
     fn format(&self, engine: &TemplateEngine) -> Result<String, failure::Error> {
