@@ -48,14 +48,20 @@ pub trait ActionRender {
 ///
 /// The target is an absolute path, treating the stage as the root.  The target supports template
 /// formatting.
-#[derive(Clone, Debug, Eq, PartialEq, Default, Serialize, Deserialize)]
-pub struct Staging(BTreeMap<Template, Vec<Source>>);
+pub type Staging = CustomStaging<Source>;
 
-impl Staging {
+/// For each stage target, a list of sources to populate it with.
+///
+/// The target is an absolute path, treating the stage as the root.  The target supports template
+/// formatting.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct CustomStaging<R: ActionRender>(BTreeMap<Template, Vec<R>>);
+
+impl<R: ActionRender> CustomStaging<R> {
     fn format(&self, engine: &TemplateEngine) -> Result<builder::Staging, failure::Error> {
         let iter = self.0.iter().map(|(target, sources)| {
             let target = abs_to_rel(&target.format(engine)?)?;
-            let sources: &Vec<Source> = sources;
+            let sources: &Vec<R> = sources;
             let mut errors = error::Errors::new();
             let sources = {
                 let sources = sources.into_iter().map(|s| s.format(engine));
@@ -76,7 +82,7 @@ impl Staging {
     }
 }
 
-impl ActionRender for Staging {
+impl<R: ActionRender> ActionRender for CustomStaging<R> {
     fn format(
         &self,
         engine: &TemplateEngine,
@@ -85,6 +91,14 @@ impl ActionRender for Staging {
             let a: Box<builder::ActionBuilder> = Box::new(a);
             a
         })
+    }
+}
+
+impl<R: ActionRender> Default for CustomStaging<R> {
+    fn default() -> Self {
+        Self {
+            0: Default::default(),
+        }
     }
 }
 
