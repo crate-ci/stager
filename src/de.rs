@@ -50,9 +50,7 @@ pub trait ActionRender {
 #[derive(Clone, Debug, Eq, PartialEq, Default, Serialize, Deserialize)]
 pub struct Staging(BTreeMap<Template, Vec<Source>>);
 
-impl ActionRender for Staging {
-    type Rendered = builder::Staging;
-
+impl Staging {
     fn format(&self, engine: &TemplateEngine) -> Result<builder::Staging, failure::Error> {
         let iter = self.0.iter().map(|(target, sources)| {
             let target = abs_to_rel(&target.format(engine)?)?;
@@ -77,6 +75,17 @@ impl ActionRender for Staging {
     }
 }
 
+impl ActionRender for Staging {
+    type Rendered = Box<builder::ActionBuilder>;
+
+    fn format(&self, engine: &TemplateEngine) -> Result<Self::Rendered, failure::Error> {
+        self.format(engine).map(|a| {
+            let a: Self::Rendered = Box::new(a);
+            a
+        })
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum Source {
@@ -93,9 +102,9 @@ impl ActionRender for Source {
         engine: &TemplateEngine,
     ) -> Result<Box<builder::ActionBuilder>, failure::Error> {
         let value: Box<builder::ActionBuilder> = match *self {
-            Source::SourceFile(ref b) => Box::new(b.format(engine)?),
-            Source::SourceFiles(ref b) => Box::new(b.format(engine)?),
-            Source::Symlink(ref b) => Box::new(b.format(engine)?),
+            Source::SourceFile(ref b) => ActionRender::format(b, engine)?,
+            Source::SourceFiles(ref b) => ActionRender::format(b, engine)?,
+            Source::Symlink(ref b) => ActionRender::format(b, engine)?,
         };
         Ok(value)
     }
@@ -116,9 +125,7 @@ pub struct SourceFile {
     symlink: Option<OneOrMany<Template>>,
 }
 
-impl ActionRender for SourceFile {
-    type Rendered = builder::SourceFile;
-
+impl SourceFile {
     fn format(&self, engine: &TemplateEngine) -> Result<builder::SourceFile, failure::Error> {
         let symlink = self.symlink
             .as_ref()
@@ -134,6 +141,17 @@ impl ActionRender for SourceFile {
             symlink,
         };
         Ok(value)
+    }
+}
+
+impl ActionRender for SourceFile {
+    type Rendered = Box<builder::ActionBuilder>;
+
+    fn format(&self, engine: &TemplateEngine) -> Result<Self::Rendered, failure::Error> {
+        self.format(engine).map(|a| {
+            let a: Self::Rendered = Box::new(a);
+            a
+        })
     }
 }
 
@@ -157,9 +175,7 @@ pub struct SourceFiles {
     allow_empty: bool,
 }
 
-impl ActionRender for SourceFiles {
-    type Rendered = builder::SourceFiles;
-
+impl SourceFiles {
     fn format(&self, engine: &TemplateEngine) -> Result<builder::SourceFiles, failure::Error> {
         let pattern = self.pattern.format(engine)?;
         let value = builder::SourceFiles {
@@ -169,6 +185,17 @@ impl ActionRender for SourceFiles {
             allow_empty: self.allow_empty,
         };
         Ok(value)
+    }
+}
+
+impl ActionRender for SourceFiles {
+    type Rendered = Box<builder::ActionBuilder>;
+
+    fn format(&self, engine: &TemplateEngine) -> Result<Self::Rendered, failure::Error> {
+        self.format(engine).map(|a| {
+            let a: Self::Rendered = Box::new(a);
+            a
+        })
     }
 }
 
@@ -183,15 +210,24 @@ pub struct Symlink {
     rename: Template,
 }
 
-impl ActionRender for Symlink {
-    type Rendered = builder::Symlink;
-
+impl Symlink {
     fn format(&self, engine: &TemplateEngine) -> Result<builder::Symlink, failure::Error> {
         let value = builder::Symlink {
             target: path::PathBuf::from(self.target.format(engine)?),
             rename: self.rename.format(engine)?,
         };
         Ok(value)
+    }
+}
+
+impl ActionRender for Symlink {
+    type Rendered = Box<builder::ActionBuilder>;
+
+    fn format(&self, engine: &TemplateEngine) -> Result<Self::Rendered, failure::Error> {
+        self.format(engine).map(|a| {
+            let a: Self::Rendered = Box::new(a);
+            a
+        })
     }
 }
 
