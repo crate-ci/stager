@@ -8,7 +8,7 @@
 //! use stager::builder::ActionBuilder;
 //!
 //! let target = path::Path::new("/tmp/example"); // dummy data
-//! let stage = builder::Staging::default(); // dummy data
+//! let stage = builder::Stage::default(); // dummy data
 //! let stage = stage.build(target).unwrap();
 //! ```
 
@@ -40,9 +40,9 @@ impl<A: ActionBuilder + ?Sized> ActionBuilder for Box<A> {
 ///
 /// The target is a path relative to the stage root.
 #[derive(Default)]
-pub struct Staging(BTreeMap<path::PathBuf, Vec<Box<ActionBuilder>>>);
+pub struct Stage(BTreeMap<path::PathBuf, Vec<Box<ActionBuilder>>>);
 
-impl ActionBuilder for Staging {
+impl ActionBuilder for Stage {
     fn build(&self, target_dir: &path::Path) -> Result<Vec<Box<action::Action>>, failure::Error> {
         let staging: Result<Vec<_>, _> = self.0
             .iter()
@@ -70,7 +70,7 @@ impl ActionBuilder for Staging {
     }
 }
 
-impl iter::FromIterator<(path::PathBuf, Vec<Box<ActionBuilder>>)> for Staging {
+impl iter::FromIterator<(path::PathBuf, Vec<Box<ActionBuilder>>)> for Stage {
     fn from_iter<I>(iter: I) -> Self
     where
         I: IntoIterator<Item = (path::PathBuf, Vec<Box<ActionBuilder>>)>,

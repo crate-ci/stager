@@ -1,8 +1,8 @@
 //! Composable file format for staging files.
 //!
-//! `stager::de::Staging` is the recommended top-level staging configuration to include in a
+//! `stager::de::MapStage` is the recommended top-level staging configuration to include in a
 //! packaging configuration struct.  If you need additional sources, you might want to consider
-//! replacing `Staging` and `Source`, reusing the rest.
+//! replacing `MapStage` and `Source`, reusing the rest.
 //!
 //! `Template` fields are rendered using the [liquid][liquid] template engine. No filters or tags
 //! are available at this time.
@@ -19,7 +19,7 @@
 //! // #[derive(Serialize, Deserialize)]
 //! #[derive(Default)]
 //! struct Config {
-//!     stage: de::Staging,
+//!     stage: de::MapStage,
 //! }
 //! // ...
 //! let engine = de::TemplateEngine::new(Default::default()).unwrap();
@@ -48,17 +48,17 @@ pub trait ActionRender {
 ///
 /// The target is an absolute path, treating the stage as the root.  The target supports template
 /// formatting.
-pub type Staging = CustomStaging<Source>;
+pub type MapStage = CustomMapStage<Source>;
 
 /// For each stage target, a list of sources to populate it with.
 ///
 /// The target is an absolute path, treating the stage as the root.  The target supports template
 /// formatting.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-pub struct CustomStaging<R: ActionRender>(BTreeMap<Template, Vec<R>>);
+pub struct CustomMapStage<R: ActionRender>(BTreeMap<Template, Vec<R>>);
 
-impl<R: ActionRender> CustomStaging<R> {
-    fn format(&self, engine: &TemplateEngine) -> Result<builder::Staging, failure::Error> {
+impl<R: ActionRender> CustomMapStage<R> {
+    fn format(&self, engine: &TemplateEngine) -> Result<builder::Stage, failure::Error> {
         let iter = self.0.iter().map(|(target, sources)| {
             let target = abs_to_rel(&target.format(engine)?)?;
             let sources: &Vec<R> = sources;
@@ -74,7 +74,7 @@ impl<R: ActionRender> CustomStaging<R> {
         let mut errors = error::Errors::new();
         let staging = {
             let iter = error::ErrorPartition::new(iter, &mut errors);
-            let staging: builder::Staging = iter.collect();
+            let staging: builder::Stage = iter.collect();
             staging
         };
 
@@ -82,7 +82,7 @@ impl<R: ActionRender> CustomStaging<R> {
     }
 }
 
-impl<R: ActionRender> ActionRender for CustomStaging<R> {
+impl<R: ActionRender> ActionRender for CustomMapStage<R> {
     fn format(
         &self,
         engine: &TemplateEngine,
@@ -94,7 +94,7 @@ impl<R: ActionRender> ActionRender for CustomStaging<R> {
     }
 }
 
-impl<R: ActionRender> Default for CustomStaging<R> {
+impl<R: ActionRender> Default for CustomMapStage<R> {
     fn default() -> Self {
         Self {
             0: Default::default(),
