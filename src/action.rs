@@ -121,36 +121,3 @@ impl Action for Symlink {
         Ok(())
     }
 }
-
-#[derive(Clone, Debug)]
-pub struct Access {
-    /// Staged file to perform op on.
-    staged: path::PathBuf,
-    /// Specifies  permissions to be applied to the `staged` file.
-    op: String,
-}
-
-impl Access {
-    pub fn new<P, S>(staged: P, op: S) -> Self
-    where
-        P: Into<path::PathBuf>,
-        S: Into<String>,
-    {
-        Self {
-            staged: staged.into(),
-            op: op.into(),
-        }
-    }
-}
-
-impl fmt::Display for Access {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "TODO(epage): Figure out what is best here")
-    }
-}
-
-impl Action for Access {
-    fn perform(&self) -> Result<(), failure::Error> {
-        bail!("TODO(epage): Figure out what is best here");
-    }
-}

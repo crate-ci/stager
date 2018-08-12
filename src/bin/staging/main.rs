@@ -22,45 +22,45 @@ extern crate toml;
 
 use std::ffi;
 use std::fs;
-use std::io::Write;
 use std::io;
+use std::io::Write;
 use std::path;
 use std::process;
 
 use failure::ResultExt;
 use structopt::StructOpt;
 
-use stager::de::Render;
 use stager::builder::ActionBuilder;
+use stager::de::ActionRender;
 
 mod stage {
     use super::*;
     use std::io::Read;
 
     #[cfg(feature = "serde_yaml")]
-    pub fn load_yaml(path: &path::Path) -> Result<stager::de::Staging, failure::Error> {
+    pub fn load_yaml(path: &path::Path) -> Result<stager::de::MapStage, failure::Error> {
         let f = fs::File::open(path)?;
         serde_yaml::from_reader(f).map_err(|e| e.into())
     }
 
     #[cfg(not(feature = "serde_yaml"))]
-    pub fn load_yaml(_path: &path::Path) -> Result<stager::de::Staging, failure::Error> {
+    pub fn load_yaml(_path: &path::Path) -> Result<stager::de::MapStage, failure::Error> {
         bail!("yaml is unsupported");
     }
 
     #[cfg(feature = "serde_json")]
-    pub fn load_json(path: &path::Path) -> Result<stager::de::Staging, failure::Error> {
+    pub fn load_json(path: &path::Path) -> Result<stager::de::MapStage, failure::Error> {
         let f = fs::File::open(path)?;
         serde_json::from_reader(f).map_err(|e| e.into())
     }
 
     #[cfg(not(feature = "serde_json"))]
-    pub fn load_json(_path: &path::Path) -> Result<stager::de::Staging, failure::Error> {
+    pub fn load_json(_path: &path::Path) -> Result<stager::de::MapStage, failure::Error> {
         bail!("json is unsupported");
     }
 
     #[cfg(feature = "toml")]
-    pub fn load_toml(path: &path::Path) -> Result<stager::de::Staging, failure::Error> {
+    pub fn load_toml(path: &path::Path) -> Result<stager::de::MapStage, failure::Error> {
         let mut f = fs::File::open(path)?;
         let mut text = String::new();
         f.read_to_string(&mut text)?;
@@ -68,12 +68,12 @@ mod stage {
     }
 
     #[cfg(not(feature = "toml"))]
-    pub fn load_toml(_path: &path::Path) -> Result<stager::de::Staging, failure::Error> {
+    pub fn load_toml(_path: &path::Path) -> Result<stager::de::MapStage, failure::Error> {
         bail!("toml is unsupported");
     }
 }
 
-fn load_stage(path: &path::Path) -> Result<stager::de::Staging, failure::Error> {
+fn load_stage(path: &path::Path) -> Result<stager::de::MapStage, failure::Error> {
     let extension = path.extension().unwrap_or_default();
     let value = if extension == ffi::OsStr::new("yaml") {
         stage::load_yaml(path)

@@ -8,7 +8,7 @@
 //! use stager::builder::ActionBuilder;
 //!
 //! let target = path::Path::new("/tmp/example"); // dummy data
-//! let stage = builder::Staging::default(); // dummy data
+//! let stage = builder::Stage::default(); // dummy data
 //! let stage = stage.build(target).unwrap();
 //! ```
 
@@ -29,13 +29,20 @@ pub trait ActionBuilder {
     fn build(&self, target_dir: &path::Path) -> Result<Vec<Box<action::Action>>, failure::Error>;
 }
 
+impl<A: ActionBuilder + ?Sized> ActionBuilder for Box<A> {
+    fn build(&self, target_dir: &path::Path) -> Result<Vec<Box<action::Action>>, failure::Error> {
+        let target: &A = &self;
+        target.build(target_dir)
+    }
+}
+
 /// For each stage target, a list of sources to populate it with.
 ///
 /// The target is a path relative to the stage root.
 #[derive(Default)]
-pub struct Staging(BTreeMap<path::PathBuf, Vec<Box<ActionBuilder>>>);
+pub struct Stage(BTreeMap<path::PathBuf, Vec<Box<ActionBuilder>>>);
 
-impl ActionBuilder for Staging {
+impl ActionBuilder for Stage {
     fn build(&self, target_dir: &path::Path) -> Result<Vec<Box<action::Action>>, failure::Error> {
         let staging: Result<Vec<_>, _> = self.0
             .iter()
@@ -63,34 +70,13 @@ impl ActionBuilder for Staging {
     }
 }
 
-impl iter::FromIterator<(path::PathBuf, Vec<Box<ActionBuilder>>)> for Staging {
+impl iter::FromIterator<(path::PathBuf, Vec<Box<ActionBuilder>>)> for Stage {
     fn from_iter<I>(iter: I) -> Self
     where
         I: IntoIterator<Item = (path::PathBuf, Vec<Box<ActionBuilder>>)>,
     {
         let staging = iter.into_iter().collect();
         Self { 0: staging }
-    }
-}
-
-/// Override the default settings for the target directory.
-#[derive(Clone, Debug)]
-pub struct Directory {
-    pub access: Vec<Access>,
-}
-
-impl ActionBuilder for Directory {
-    fn build(&self, target_dir: &path::Path) -> Result<Vec<Box<action::Action>>, failure::Error> {
-        let create: Box<action::Action> = Box::new(action::CreateDirectory::new(target_dir));
-
-        let mut actions = vec![create];
-        actions.extend(self.access.iter().cloned().map(|a| {
-            let a = action::Access::new(target_dir, a.op);
-            let a: Box<action::Action> = Box::new(a);
-            a
-        }));
-
-        Ok(actions)
     }
 }
 
@@ -102,9 +88,7 @@ pub struct SourceFile {
     /// Specifies the name the target file should be renamed as when copying from the source file.
     /// Default is the filename of the source file.
     pub rename: Option<String>,
-    pub access: Vec<Access>,
-    /// Specifies symbolic links to `rename` in the same target directory and using the same
-    /// `access`.
+    /// Specifies symbolic links to `rename` in the same target directory.
     pub symlink: Vec<String>,
 }
 
@@ -130,11 +114,6 @@ impl ActionBuilder for SourceFile {
         let copy: Box<action::Action> = Box::new(action::CopyFile::new(&copy_target, path));
 
         let mut actions = vec![copy];
-        actions.extend(self.access.iter().cloned().map(|a| {
-            let a = action::Access::new(target_dir, a.op);
-            let a: Box<action::Action> = Box::new(a);
-            a
-        }));
         actions.extend(self.symlink.iter().map(|s| {
             let s = path::Path::new(s);
             // TODO(epage): Re-enable this error check
@@ -170,7 +149,6 @@ pub struct SourceFiles {
     /// example of when no results are acceptable is a default staging configuration that
     /// implements a lot of default "good enough" policy.
     pub allow_empty: bool,
-    pub access: Vec<Access>,
 }
 
 impl ActionBuilder for SourceFiles {
@@ -193,12 +171,6 @@ impl ActionBuilder for SourceFiles {
             let copy: Box<action::Action> =
                 Box::new(action::CopyFile::new(&copy_target, source_file));
             actions.push(copy);
-
-            actions.extend(self.access.iter().cloned().map(|a| {
-                let a = action::Access::new(target_dir, a.op);
-                let a: Box<action::Action> = Box::new(a);
-                a
-            }));
         }
 
         if actions.is_empty() {
@@ -228,7 +200,6 @@ pub struct Symlink {
     /// Specifies the name the symlink should be given.
     /// Default is the filename of the `target`.
     pub rename: String,
-    pub access: Vec<Access>,
 }
 
 impl ActionBuilder for Symlink {
@@ -241,19 +212,8 @@ impl ActionBuilder for Symlink {
         let staged = target_dir.join(rename);
         let link: Box<action::Action> = Box::new(action::Symlink::new(&staged, target));
 
-        let mut actions = vec![link];
-        actions.extend(self.access.iter().cloned().map(|a| {
-            let a = action::Access::new(target, a.op);
-            let a: Box<action::Action> = Box::new(a);
-            a
-        }));
+        let actions = vec![link];
 
         Ok(actions)
     }
-}
-
-#[derive(Clone, Debug)]
-pub struct Access {
-    /// Specifies  permissions to be applied to the file.
-    pub op: String,
 }

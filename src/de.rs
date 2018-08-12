@@ -1,8 +1,8 @@
 //! Composable file format for staging files.
 //!
-//! `stager::de::Staging` is the recommended top-level staging configuration to include in a
+//! `stager::de::MapStage` is the recommended top-level staging configuration to include in a
 //! packaging configuration struct.  If you need additional sources, you might want to consider
-//! replacing `Staging` and `Source`, reusing the rest.
+//! replacing `MapStage` and `Source`, reusing the rest.
 //!
 //! `Template` fields are rendered using the [liquid][liquid] template engine. No filters or tags
 //! are available at this time.
@@ -14,12 +14,12 @@
 //! ```rust
 //! use std::path;
 //! use stager::de;
-//! use stager::de::Render;
+//! use stager::de::ActionRender;
 //!
 //! // #[derive(Serialize, Deserialize)]
 //! #[derive(Default)]
 //! struct Config {
-//!     stage: de::Staging,
+//!     stage: de::MapStage,
 //! }
 //! // ...
 //! let engine = de::TemplateEngine::new(Default::default()).unwrap();
@@ -37,26 +37,31 @@ use builder;
 use error;
 
 /// Translate user-facing configuration to the staging APIs.
-pub trait Render {
-    type Rendered;
-
-    fn format(&self, engine: &TemplateEngine) -> Result<Self::Rendered, failure::Error>;
+pub trait ActionRender {
+    fn format(
+        &self,
+        engine: &TemplateEngine,
+    ) -> Result<Box<builder::ActionBuilder>, failure::Error>;
 }
 
 /// For each stage target, a list of sources to populate it with.
 ///
 /// The target is an absolute path, treating the stage as the root.  The target supports template
 /// formatting.
-#[derive(Clone, Debug, Eq, PartialEq, Default, Serialize, Deserialize)]
-pub struct Staging(BTreeMap<Template, Vec<Source>>);
+pub type MapStage = CustomMapStage<Source>;
 
-impl Render for Staging {
-    type Rendered = builder::Staging;
+/// For each stage target, a list of sources to populate it with.
+///
+/// The target is an absolute path, treating the stage as the root.  The target supports template
+/// formatting.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct CustomMapStage<R: ActionRender>(BTreeMap<Template, Vec<R>>);
 
-    fn format(&self, engine: &TemplateEngine) -> Result<builder::Staging, failure::Error> {
+impl<R: ActionRender> CustomMapStage<R> {
+    fn format(&self, engine: &TemplateEngine) -> Result<builder::Stage, failure::Error> {
         let iter = self.0.iter().map(|(target, sources)| {
             let target = abs_to_rel(&target.format(engine)?)?;
-            let sources: &Vec<Source> = sources;
+            let sources: &Vec<R> = sources;
             let mut errors = error::Errors::new();
             let sources = {
                 let sources = sources.into_iter().map(|s| s.format(engine));
@@ -69,7 +74,7 @@ impl Render for Staging {
         let mut errors = error::Errors::new();
         let staging = {
             let iter = error::ErrorPartition::new(iter, &mut errors);
-            let staging: builder::Staging = iter.collect();
+            let staging: builder::Stage = iter.collect();
             staging
         };
 
@@ -77,45 +82,44 @@ impl Render for Staging {
     }
 }
 
+impl<R: ActionRender> ActionRender for CustomMapStage<R> {
+    fn format(
+        &self,
+        engine: &TemplateEngine,
+    ) -> Result<Box<builder::ActionBuilder>, failure::Error> {
+        self.format(engine).map(|a| {
+            let a: Box<builder::ActionBuilder> = Box::new(a);
+            a
+        })
+    }
+}
+
+impl<R: ActionRender> Default for CustomMapStage<R> {
+    fn default() -> Self {
+        Self {
+            0: Default::default(),
+        }
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum Source {
-    Directory(Directory),
     SourceFile(SourceFile),
     SourceFiles(SourceFiles),
     Symlink(Symlink),
 }
 
-impl Render for Source {
-    type Rendered = Box<builder::ActionBuilder>;
-
+impl ActionRender for Source {
     fn format(
         &self,
         engine: &TemplateEngine,
     ) -> Result<Box<builder::ActionBuilder>, failure::Error> {
         let value: Box<builder::ActionBuilder> = match *self {
-            Source::Directory(ref b) => Box::new(b.format(engine)?),
-            Source::SourceFile(ref b) => Box::new(b.format(engine)?),
-            Source::SourceFiles(ref b) => Box::new(b.format(engine)?),
-            Source::Symlink(ref b) => Box::new(b.format(engine)?),
+            Source::SourceFile(ref b) => ActionRender::format(b, engine)?,
+            Source::SourceFiles(ref b) => ActionRender::format(b, engine)?,
+            Source::Symlink(ref b) => ActionRender::format(b, engine)?,
         };
-        Ok(value)
-    }
-}
-
-/// Override the default settings for the target directory.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Directory {
-    access: OneOrMany<Access>,
-}
-
-impl Render for Directory {
-    type Rendered = builder::Directory;
-
-    fn format(&self, engine: &TemplateEngine) -> Result<builder::Directory, failure::Error> {
-        let access = self.access.format(engine)?;
-        let value = builder::Directory { access };
         Ok(value)
     }
 }
@@ -130,23 +134,13 @@ pub struct SourceFile {
     /// Default is the filename of the source file.
     #[serde(default)]
     rename: Option<Template>,
-    /// Specifies symbolic links to `rename` in the same target directory and using the same
-    /// `access`.
+    /// Specifies symbolic links to `rename` in the same target directory.
     #[serde(default)]
     symlink: Option<OneOrMany<Template>>,
-    #[serde(default)]
-    access: Option<OneOrMany<Access>>,
 }
 
-impl Render for SourceFile {
-    type Rendered = builder::SourceFile;
-
+impl SourceFile {
     fn format(&self, engine: &TemplateEngine) -> Result<builder::SourceFile, failure::Error> {
-        let access = self.access
-            .as_ref()
-            .map(|a| a.format(engine))
-            .map_or(Ok(None), |r| r.map(Some))?
-            .unwrap_or_default();
         let symlink = self.symlink
             .as_ref()
             .map(|a| a.format(engine))
@@ -159,9 +153,20 @@ impl Render for SourceFile {
                 .map(|t| t.format(engine))
                 .map_or(Ok(None), |r| r.map(Some))?,
             symlink,
-            access,
         };
         Ok(value)
+    }
+}
+
+impl ActionRender for SourceFile {
+    fn format(
+        &self,
+        engine: &TemplateEngine,
+    ) -> Result<Box<builder::ActionBuilder>, failure::Error> {
+        self.format(engine).map(|a| {
+            let a: Box<builder::ActionBuilder> = Box::new(a);
+            a
+        })
     }
 }
 
@@ -183,28 +188,30 @@ pub struct SourceFiles {
     /// implements a lot of default "good enough" policy.
     #[serde(default)]
     allow_empty: bool,
-    #[serde(default)]
-    access: Option<OneOrMany<Access>>,
 }
 
-impl Render for SourceFiles {
-    type Rendered = builder::SourceFiles;
-
+impl SourceFiles {
     fn format(&self, engine: &TemplateEngine) -> Result<builder::SourceFiles, failure::Error> {
         let pattern = self.pattern.format(engine)?;
-        let access = self.access
-            .as_ref()
-            .map(|a| a.format(engine))
-            .map_or(Ok(None), |r| r.map(Some))?
-            .unwrap_or_default();
         let value = builder::SourceFiles {
             path: path::PathBuf::from(self.path.format(engine)?),
             pattern,
             follow_links: self.follow_links,
             allow_empty: self.allow_empty,
-            access,
         };
         Ok(value)
+    }
+}
+
+impl ActionRender for SourceFiles {
+    fn format(
+        &self,
+        engine: &TemplateEngine,
+    ) -> Result<Box<builder::ActionBuilder>, failure::Error> {
+        self.format(engine).map(|a| {
+            let a: Box<builder::ActionBuilder> = Box::new(a);
+            a
+        })
     }
 }
 
@@ -217,70 +224,27 @@ pub struct Symlink {
     /// Specifies the name the symlink should be given.
     /// Default is the filename of the `target`.
     rename: Template,
-    #[serde(default)]
-    access: Option<OneOrMany<Access>>,
 }
 
-impl Render for Symlink {
-    type Rendered = builder::Symlink;
-
+impl Symlink {
     fn format(&self, engine: &TemplateEngine) -> Result<builder::Symlink, failure::Error> {
-        let access = self.access
-            .as_ref()
-            .map(|a| a.format(engine))
-            .map_or(Ok(None), |r| r.map(Some))?
-            .unwrap_or_default();
         let value = builder::Symlink {
             target: path::PathBuf::from(self.target.format(engine)?),
             rename: self.rename.format(engine)?,
-            access,
         };
         Ok(value)
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Access {
-    /// Specifies  permissions to be applied to the file.
-    op: String,
-}
-
-impl Render for Access {
-    type Rendered = builder::Access;
-
-    fn format(&self, _engine: &TemplateEngine) -> Result<builder::Access, failure::Error> {
-        let value = builder::Access {
-            op: self.op.clone(),
-        };
-        Ok(value)
-    }
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum OneOrMany<T> {
-    One(T),
-    Many(Vec<T>),
-}
-
-impl<T> Render for OneOrMany<T>
-where
-    T: Render,
-{
-    type Rendered = Vec<T::Rendered>;
-
-    fn format(&self, engine: &TemplateEngine) -> Result<Self::Rendered, failure::Error> {
-        match *self {
-            OneOrMany::One(ref v) => {
-                let u = v.format(engine)?;
-                Ok(vec![u])
-            }
-            OneOrMany::Many(ref v) => {
-                let u: Result<Vec<_>, _> = v.iter().map(|a| a.format(engine)).collect();
-                u
-            }
-        }
+impl ActionRender for Symlink {
+    fn format(
+        &self,
+        engine: &TemplateEngine,
+    ) -> Result<Box<builder::ActionBuilder>, failure::Error> {
+        self.format(engine).map(|a| {
+            let a: Box<builder::ActionBuilder> = Box::new(a);
+            a
+        })
     }
 }
 
@@ -314,6 +278,40 @@ impl TemplateEngine {
     }
 }
 
+/// Translate user-facing value to a staging value.
+pub trait TemplateRender {
+    type Rendered;
+
+    fn format(&self, engine: &TemplateEngine) -> Result<Self::Rendered, failure::Error>;
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum OneOrMany<T> {
+    One(T),
+    Many(Vec<T>),
+}
+
+impl<T> TemplateRender for OneOrMany<T>
+where
+    T: TemplateRender,
+{
+    type Rendered = Vec<T::Rendered>;
+
+    fn format(&self, engine: &TemplateEngine) -> Result<Self::Rendered, failure::Error> {
+        match *self {
+            OneOrMany::One(ref v) => {
+                let u = v.format(engine)?;
+                Ok(vec![u])
+            }
+            OneOrMany::Many(ref v) => {
+                let u: Result<Vec<_>, _> = v.iter().map(|a| a.format(engine)).collect();
+                u
+            }
+        }
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
 pub struct Template(String);
 
@@ -326,7 +324,7 @@ impl Template {
     }
 }
 
-impl Render for Template {
+impl TemplateRender for Template {
     type Rendered = String;
 
     fn format(&self, engine: &TemplateEngine) -> Result<String, failure::Error> {
