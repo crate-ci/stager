@@ -147,19 +147,18 @@ pub struct SourceFile {
 
 impl SourceFile {
     fn format(&self, engine: &TemplateEngine) -> Result<builder::SourceFile, failure::Error> {
+        let path = path::PathBuf::from(self.path.format(engine)?);
         let symlink = self.symlink
             .as_ref()
             .map(|a| a.format(engine))
             .map_or(Ok(None), |r| r.map(Some))?
             .unwrap_or_default();
-        let value = builder::SourceFile {
-            path: path::PathBuf::from(self.path.format(engine)?),
-            rename: self.rename
+        let value = builder::SourceFile::new(path)
+            .rename(self.rename
                 .as_ref()
                 .map(|t| t.format(engine))
-                .map_or(Ok(None), |r| r.map(Some))?,
-            symlink,
-        };
+                .map_or(Ok(None), |r| r.map(Some))?)
+            .push_symlinks(symlink.into_iter());
         Ok(value)
     }
 }
@@ -198,13 +197,12 @@ pub struct SourceFiles {
 
 impl SourceFiles {
     fn format(&self, engine: &TemplateEngine) -> Result<builder::SourceFiles, failure::Error> {
+        let path = path::PathBuf::from(self.path.format(engine)?);
         let pattern = self.pattern.format(engine)?;
-        let value = builder::SourceFiles {
-            path: path::PathBuf::from(self.path.format(engine)?),
-            pattern,
-            follow_links: self.follow_links,
-            allow_empty: self.allow_empty,
-        };
+        let value = builder::SourceFiles::new(path)
+            .push_patterns(pattern.into_iter())
+            .follow_links(self.follow_links)
+            .allow_empty(self.allow_empty);
         Ok(value)
     }
 }
@@ -229,15 +227,17 @@ pub struct Symlink {
     target: Template,
     /// Specifies the name the symlink should be given.
     /// Default is the filename of the `target`.
-    rename: Template,
+    #[serde(default)]
+    rename: Option<Template>,
 }
 
 impl Symlink {
     fn format(&self, engine: &TemplateEngine) -> Result<builder::Symlink, failure::Error> {
-        let value = builder::Symlink {
-            target: path::PathBuf::from(self.target.format(engine)?),
-            rename: self.rename.format(engine)?,
-        };
+        let target = path::PathBuf::from(self.target.format(engine)?);
+        let value = builder::Symlink::new(target).rename(self.rename
+            .as_ref()
+            .map(|t| t.format(engine))
+            .map_or(Ok(None), |r| r.map(Some))?);
         Ok(value)
     }
 }
