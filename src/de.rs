@@ -31,13 +31,15 @@ use std::collections::BTreeMap;
 use std::path;
 
 use failure;
-use liquid;
 
 use builder;
 use error;
 
+pub use template::*;
+
 /// Translate user-facing configuration to the staging APIs.
 pub trait ActionRender {
+    /// Format the serialized data into an `ActionBuilder`.
     fn format(
         &self,
         engine: &TemplateEngine,
@@ -104,10 +106,16 @@ impl<R: ActionRender> Default for CustomMapStage<R> {
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type")]
+/// Content to stage.
 pub enum Source {
+    /// Specifies a file to be staged into the target directory.
     SourceFile(SourceFile),
+    /// Specifies a collection of files to be staged into the target directory.
     SourceFiles(SourceFiles),
+    /// Specifies a symbolic link file to be staged into the target directory.
     Symlink(Symlink),
+    #[doc(hidden)]
+    __Nonexhaustive,
 }
 
 impl ActionRender for Source {
@@ -119,6 +127,7 @@ impl ActionRender for Source {
             Source::SourceFile(ref b) => ActionRender::format(b, engine)?,
             Source::SourceFiles(ref b) => ActionRender::format(b, engine)?,
             Source::Symlink(ref b) => ActionRender::format(b, engine)?,
+            Source::__Nonexhaustive => unreachable!("This is a non-public case"),
         };
         Ok(value)
     }
@@ -129,31 +138,32 @@ impl ActionRender for Source {
 #[serde(deny_unknown_fields)]
 pub struct SourceFile {
     ///  Specifies the full path of the file to be copied into the target directory
-    path: Template,
+    pub path: Template,
     /// Specifies the name the target file should be renamed as when copying from the source file.
     /// Default is the filename of the source file.
     #[serde(default)]
-    rename: Option<Template>,
+    pub rename: Option<Template>,
     /// Specifies symbolic links to `rename` in the same target directory.
     #[serde(default)]
-    symlink: Option<OneOrMany<Template>>,
+    pub symlink: Option<OneOrMany<Template>>,
+    #[serde(skip)]
+    non_exhaustive: (),
 }
 
 impl SourceFile {
     fn format(&self, engine: &TemplateEngine) -> Result<builder::SourceFile, failure::Error> {
+        let path = path::PathBuf::from(self.path.format(engine)?);
         let symlink = self.symlink
             .as_ref()
             .map(|a| a.format(engine))
             .map_or(Ok(None), |r| r.map(Some))?
             .unwrap_or_default();
-        let value = builder::SourceFile {
-            path: path::PathBuf::from(self.path.format(engine)?),
-            rename: self.rename
+        let value = builder::SourceFile::new(path)
+            .rename(self.rename
                 .as_ref()
                 .map(|t| t.format(engine))
-                .map_or(Ok(None), |r| r.map(Some))?,
-            symlink,
-        };
+                .map_or(Ok(None), |r| r.map(Some))?)
+            .push_symlinks(symlink.into_iter());
         Ok(value)
     }
 }
@@ -176,29 +186,32 @@ impl ActionRender for SourceFile {
 pub struct SourceFiles {
     ///  Specifies the root path that `patterns` will be run on to identify files to be copied into
     ///  the target directory.
-    path: Template,
+    pub path: Template,
     /// Specifies the pattern for executing the recursive/multifile match.
-    pattern: OneOrMany<Template>,
+    pub pattern: OneOrMany<Template>,
+    /// When true, symbolic links are followed as if they were normal directories and files.
+    /// If a symbolic link is broken or is involved in a loop, an error is yielded.
     #[serde(default)]
-    follow_links: bool,
+    pub follow_links: bool,
     /// Toggles whether no results for the pattern constitutes an error.
     ///
     /// Generally, the default of `false` is best because it makes mistakes more obvious.  An
     /// example of when no results are acceptable is a default staging configuration that
     /// implements a lot of default "good enough" policy.
     #[serde(default)]
-    allow_empty: bool,
+    pub allow_empty: bool,
+    #[serde(skip)]
+    non_exhaustive: (),
 }
 
 impl SourceFiles {
     fn format(&self, engine: &TemplateEngine) -> Result<builder::SourceFiles, failure::Error> {
+        let path = path::PathBuf::from(self.path.format(engine)?);
         let pattern = self.pattern.format(engine)?;
-        let value = builder::SourceFiles {
-            path: path::PathBuf::from(self.path.format(engine)?),
-            pattern,
-            follow_links: self.follow_links,
-            allow_empty: self.allow_empty,
-        };
+        let value = builder::SourceFiles::new(path)
+            .push_patterns(pattern.into_iter())
+            .follow_links(self.follow_links)
+            .allow_empty(self.allow_empty);
         Ok(value)
     }
 }
@@ -220,18 +233,22 @@ impl ActionRender for SourceFiles {
 #[serde(deny_unknown_fields)]
 pub struct Symlink {
     /// The literal path for the target to point to.
-    target: Template,
+    pub target: Template,
     /// Specifies the name the symlink should be given.
     /// Default is the filename of the `target`.
-    rename: Template,
+    #[serde(default)]
+    pub rename: Option<Template>,
+    #[serde(skip)]
+    non_exhaustive: (),
 }
 
 impl Symlink {
     fn format(&self, engine: &TemplateEngine) -> Result<builder::Symlink, failure::Error> {
-        let value = builder::Symlink {
-            target: path::PathBuf::from(self.target.format(engine)?),
-            rename: self.rename.format(engine)?,
-        };
+        let target = path::PathBuf::from(self.target.format(engine)?);
+        let value = builder::Symlink::new(target).rename(self.rename
+            .as_ref()
+            .map(|t| t.format(engine))
+            .map_or(Ok(None), |r| r.map(Some))?);
         Ok(value)
     }
 }
@@ -245,90 +262,6 @@ impl ActionRender for Symlink {
             let a: Box<builder::ActionBuilder> = Box::new(a);
             a
         })
-    }
-}
-
-// TODO(epage): Look into making template system pluggable
-// - Leverage traits
-// - Possibly get liquid to also work with serializables like Tera(?)
-// But should we?  Would it be better to have consistency in syntax and functionality?
-// Either way, might be better to switch to another template engine if it looks like its getting
-// traction within Rust community (like whatever is used for cargo templates) and to one that will
-// be 1.0 sooner.
-pub struct TemplateEngine {
-    pub parser: liquid::Parser,
-    pub data: liquid::Object,
-}
-
-impl TemplateEngine {
-    pub fn new(data: liquid::Object) -> Result<Self, failure::Error> {
-        // TODO(eage): Better customize liquid
-        // - Add raw block
-        // - Remove irrelevant filters (like HTML ones)
-        // - Add path manipulation filters
-        let parser = liquid::ParserBuilder::new().liquid_filters().build();
-        Ok(Self { parser, data })
-    }
-
-    pub fn render(&self, template: &str) -> Result<String, failure::Error> {
-        // TODO(epage): get liquid to be compatible with failure::Fail
-        let template = self.parser.parse(template)?;
-        let content = template.render(&self.data)?;
-        Ok(content)
-    }
-}
-
-/// Translate user-facing value to a staging value.
-pub trait TemplateRender {
-    type Rendered;
-
-    fn format(&self, engine: &TemplateEngine) -> Result<Self::Rendered, failure::Error>;
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum OneOrMany<T> {
-    One(T),
-    Many(Vec<T>),
-}
-
-impl<T> TemplateRender for OneOrMany<T>
-where
-    T: TemplateRender,
-{
-    type Rendered = Vec<T::Rendered>;
-
-    fn format(&self, engine: &TemplateEngine) -> Result<Self::Rendered, failure::Error> {
-        match *self {
-            OneOrMany::One(ref v) => {
-                let u = v.format(engine)?;
-                Ok(vec![u])
-            }
-            OneOrMany::Many(ref v) => {
-                let u: Result<Vec<_>, _> = v.iter().map(|a| a.format(engine)).collect();
-                u
-            }
-        }
-    }
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
-pub struct Template(String);
-
-impl Template {
-    pub fn new<S>(s: S) -> Self
-    where
-        S: Into<String>,
-    {
-        Self { 0: s.into() }
-    }
-}
-
-impl TemplateRender for Template {
-    type Rendered = String;
-
-    fn format(&self, engine: &TemplateEngine) -> Result<String, failure::Error> {
-        engine.render(&self.0)
     }
 }
 

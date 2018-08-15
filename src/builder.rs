@@ -14,6 +14,7 @@
 
 use std::collections::BTreeMap;
 use std::ffi;
+use std::fmt;
 use std::iter;
 use std::path;
 
@@ -23,9 +24,13 @@ use globwalk;
 use action;
 use error;
 
-pub trait ActionBuilder {
+/// Create concrete filesystem actions.
+pub trait ActionBuilder: fmt::Debug {
     // TODO(epage):
     // - Change to `Iterator`.
+    /// Create concrete filesystem actions.
+    ///
+    /// - `target_dir`: The location everything will be written to (ie the stage).
     fn build(&self, target_dir: &path::Path) -> Result<Vec<Box<action::Action>>, failure::Error>;
 }
 
@@ -39,7 +44,7 @@ impl<A: ActionBuilder + ?Sized> ActionBuilder for Box<A> {
 /// For each stage target, a list of sources to populate it with.
 ///
 /// The target is a path relative to the stage root.
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct Stage(BTreeMap<path::PathBuf, Vec<Box<ActionBuilder>>>);
 
 impl ActionBuilder for Stage {
@@ -83,13 +88,38 @@ impl iter::FromIterator<(path::PathBuf, Vec<Box<ActionBuilder>>)> for Stage {
 /// Specifies a file to be staged into the target directory.
 #[derive(Clone, Debug)]
 pub struct SourceFile {
-    ///  Specifies the full path of the file to be copied into the target directory
-    pub path: path::PathBuf,
+    path: path::PathBuf,
+    rename: Option<String>,
+    symlink: Vec<String>,
+}
+
+impl SourceFile {
+    /// Specifies a file to be staged into the target directory.
+    ///
+    /// - `source`: full path of the file to be copied into the target directory
+    pub fn new<P>(source: P) -> Self
+    where
+        P: Into<path::PathBuf>,
+    {
+        Self {
+            path: source.into(),
+            rename: None,
+            symlink: Default::default(),
+        }
+    }
+
     /// Specifies the name the target file should be renamed as when copying from the source file.
     /// Default is the filename of the source file.
-    pub rename: Option<String>,
+    pub fn rename<S: Into<String>>(mut self, filename: Option<S>) -> Self {
+        self.rename = filename.map(|f| f.into());
+        self
+    }
+
     /// Specifies symbolic links to `rename` in the same target directory.
-    pub symlink: Vec<String>,
+    pub fn push_symlinks<I: Iterator<Item = String>>(mut self, symlinks: I) -> Self {
+        self.symlink.extend(symlinks);
+        self
+    }
 }
 
 impl ActionBuilder for SourceFile {
@@ -133,22 +163,55 @@ impl ActionBuilder for SourceFile {
 /// Specifies a collection of files to be staged into the target directory.
 #[derive(Clone, Debug)]
 pub struct SourceFiles {
-    ///  Specifies the root path that `pattern` will be run on to identify files to be copied into
-    ///  the target directory.
-    pub path: path::PathBuf,
+    path: path::PathBuf,
+    pattern: Vec<String>,
+    follow_links: bool,
+    allow_empty: bool,
+}
+
+impl SourceFiles {
+    /// Specifies a collection of files to be staged into the target directory.
+    ///
+    /// - `source`: the root path that `pattern` will be run on to identify files to be copied into
+    ///   the target directory.
+    pub fn new<P>(source: P) -> Self
+    where
+        P: Into<path::PathBuf>,
+    {
+        Self {
+            path: source.into(),
+            pattern: Default::default(),
+            follow_links: false,
+            allow_empty: false,
+        }
+    }
+
     /// Specifies the `pattern` for executing the recursive/multifile match.
     ///
     /// `pattern` uses [gitignore][gitignore] syntax.
     ///
     /// [gitignore]: https://git-scm.com/docs/gitignore#_pattern_format
-    pub pattern: Vec<String>,
-    pub follow_links: bool,
+    pub fn push_patterns<I: Iterator<Item = String>>(mut self, patterns: I) -> Self {
+        self.pattern.extend(patterns);
+        self
+    }
+
+    /// When true, symbolic links are followed as if they were normal directories and files.
+    /// If a symbolic link is broken or is involved in a loop, an error is yielded.
+    pub fn follow_links(mut self, yes: bool) -> Self {
+        self.follow_links = yes;
+        self
+    }
+
     /// Toggles whether no results for the pattern constitutes an error.
     ///
     /// Generally, the default of `false` is best because it makes mistakes more obvious.  An
     /// example of when no results are acceptable is a default staging configuration that
     /// implements a lot of default "good enough" policy.
-    pub allow_empty: bool,
+    pub fn allow_empty(mut self, yes: bool) -> Self {
+        self.allow_empty = yes;
+        self
+    }
 }
 
 impl ActionBuilder for SourceFiles {
@@ -195,21 +258,45 @@ impl ActionBuilder for SourceFiles {
 /// Specifies a symbolic link file to be staged into the target directory.
 #[derive(Clone, Debug)]
 pub struct Symlink {
-    /// The literal path for the target to point to.
-    pub target: path::PathBuf,
+    target: path::PathBuf,
+    rename: Option<String>,
+}
+
+impl Symlink {
+    /// Specifies a symbolic link file to be staged into the target directory.
+    ///
+    /// - `target`: The literal path for the target to point to.
+    pub fn new<P>(target: P) -> Self
+    where
+        P: Into<path::PathBuf>,
+    {
+        Self {
+            target: target.into(),
+            rename: None,
+        }
+    }
+
     /// Specifies the name the symlink should be given.
     /// Default is the filename of the `target`.
-    pub rename: String,
+    pub fn rename<S: Into<String>>(mut self, filename: Option<S>) -> Self {
+        self.rename = filename.map(|f| f.into());
+        self
+    }
 }
 
 impl ActionBuilder for Symlink {
     fn build(&self, target_dir: &path::Path) -> Result<Vec<Box<action::Action>>, failure::Error> {
         let target = self.target.as_path();
-        let rename = path::Path::new(&self.rename);
-        if rename.file_name() != Some(rename.as_os_str()) {
-            bail!("Symlink rename must not change directories: {:?}", rename);
+
+        let filename = self.rename
+            .as_ref()
+            .map(|n| ffi::OsStr::new(n))
+            .unwrap_or_else(|| target.file_name().unwrap_or_default());
+        let filename = path::Path::new(filename);
+        if filename.file_name() != Some(filename.as_os_str()) {
+            bail!("Symlink rename must not change directories: {:?}", filename);
         }
-        let staged = target_dir.join(rename);
+        let staged = target_dir.join(filename);
         let link: Box<action::Action> = Box::new(action::Symlink::new(&staged, target));
 
         let actions = vec![link];

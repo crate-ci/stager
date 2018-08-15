@@ -24,7 +24,7 @@
 //!
 //! [tarball]: https://github.com/crate-ci/cargo-tarball
 
-#![warn(warnings)]
+#![warn(missing_docs, missing_debug_implementations)]
 
 #[macro_use]
 extern crate failure;
@@ -41,5 +41,7 @@ pub mod action;
 pub mod builder;
 #[cfg(feature = "de")]
 pub mod de;
+#[cfg(feature = "de")]
+mod template;
 
 mod error;

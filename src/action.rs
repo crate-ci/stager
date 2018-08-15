@@ -6,19 +6,23 @@ use std::path;
 
 use failure;
 
+// `Display` is required for dry-runs / previews.
 /// Operation for setting up staged directory tree.
-pub trait Action: fmt::Display {
+pub trait Action: fmt::Display + fmt::Debug {
+    /// Execute the current action, writing to the stage.
     fn perform(&self) -> Result<(), failure::Error>;
 }
 
 /// Specifies a staged directory to be created.
 #[derive(Clone, Debug)]
 pub struct CreateDirectory {
-    /// Staged file to perform op on.
     staged: path::PathBuf,
 }
 
 impl CreateDirectory {
+    /// Specifies a staged directory to be created.
+    ///
+    /// - `staged`: full path to future directory.
     pub fn new<P>(staged: P) -> Self
     where
         P: Into<path::PathBuf>,
@@ -46,13 +50,15 @@ impl Action for CreateDirectory {
 /// Specifies a file to be staged into the target directory.
 #[derive(Clone, Debug)]
 pub struct CopyFile {
-    /// Staged file to perform op on.
     staged: path::PathBuf,
-    ///  Specifies the full path of the file to be copied into the `staged` file.
     source: path::PathBuf,
 }
 
 impl CopyFile {
+    /// Specifies a file to be staged into the target directory.
+    ///
+    /// - `staged`: full path to future file.
+    /// - `source`: full path to file being written to `staged`.
     pub fn new<D, S>(staged: D, source: S) -> Self
     where
         D: Into<path::PathBuf>,
@@ -85,13 +91,15 @@ impl Action for CopyFile {
 /// Specifies a symbolic link file to be staged into the target directory.
 #[derive(Clone, Debug)]
 pub struct Symlink {
-    /// Staged file to perform op on.
     staged: path::PathBuf,
-    /// The literal path for the target to point to.
     target: path::PathBuf,
 }
 
 impl Symlink {
+    /// Specifies a symbolic link file to be staged into the target directory.
+    ///
+    /// - `staged`: full path for future symlink.
+    /// - `target`: path that symlink will point to.
     pub fn new<S, T>(staged: S, target: T) -> Self
     where
         S: Into<path::PathBuf>,
