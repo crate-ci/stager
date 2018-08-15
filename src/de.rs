@@ -114,6 +114,8 @@ pub enum Source {
     SourceFiles(SourceFiles),
     /// Specifies a symbolic link file to be staged into the target directory.
     Symlink(Symlink),
+    #[doc(hidden)]
+    __Nonexhaustive,
 }
 
 impl ActionRender for Source {
@@ -125,6 +127,7 @@ impl ActionRender for Source {
             Source::SourceFile(ref b) => ActionRender::format(b, engine)?,
             Source::SourceFiles(ref b) => ActionRender::format(b, engine)?,
             Source::Symlink(ref b) => ActionRender::format(b, engine)?,
+            Source::__Nonexhaustive => unreachable!("This is a non-public case"),
         };
         Ok(value)
     }
@@ -135,14 +138,16 @@ impl ActionRender for Source {
 #[serde(deny_unknown_fields)]
 pub struct SourceFile {
     ///  Specifies the full path of the file to be copied into the target directory
-    path: Template,
+    pub path: Template,
     /// Specifies the name the target file should be renamed as when copying from the source file.
     /// Default is the filename of the source file.
     #[serde(default)]
-    rename: Option<Template>,
+    pub rename: Option<Template>,
     /// Specifies symbolic links to `rename` in the same target directory.
     #[serde(default)]
-    symlink: Option<OneOrMany<Template>>,
+    pub symlink: Option<OneOrMany<Template>>,
+    #[serde(skip)]
+    non_exhaustive: (),
 }
 
 impl SourceFile {
@@ -181,18 +186,22 @@ impl ActionRender for SourceFile {
 pub struct SourceFiles {
     ///  Specifies the root path that `patterns` will be run on to identify files to be copied into
     ///  the target directory.
-    path: Template,
+    pub path: Template,
     /// Specifies the pattern for executing the recursive/multifile match.
-    pattern: OneOrMany<Template>,
+    pub pattern: OneOrMany<Template>,
+    /// When true, symbolic links are followed as if they were normal directories and files.
+    /// If a symbolic link is broken or is involved in a loop, an error is yielded.
     #[serde(default)]
-    follow_links: bool,
+    pub follow_links: bool,
     /// Toggles whether no results for the pattern constitutes an error.
     ///
     /// Generally, the default of `false` is best because it makes mistakes more obvious.  An
     /// example of when no results are acceptable is a default staging configuration that
     /// implements a lot of default "good enough" policy.
     #[serde(default)]
-    allow_empty: bool,
+    pub allow_empty: bool,
+    #[serde(skip)]
+    non_exhaustive: (),
 }
 
 impl SourceFiles {
@@ -224,11 +233,13 @@ impl ActionRender for SourceFiles {
 #[serde(deny_unknown_fields)]
 pub struct Symlink {
     /// The literal path for the target to point to.
-    target: Template,
+    pub target: Template,
     /// Specifies the name the symlink should be given.
     /// Default is the filename of the `target`.
     #[serde(default)]
-    rename: Option<Template>,
+    pub rename: Option<Template>,
+    #[serde(skip)]
+    non_exhaustive: (),
 }
 
 impl Symlink {
