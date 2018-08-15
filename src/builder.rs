@@ -14,6 +14,7 @@
 
 use std::collections::BTreeMap;
 use std::ffi;
+use std::fmt;
 use std::iter;
 use std::path;
 
@@ -23,9 +24,13 @@ use globwalk;
 use action;
 use error;
 
-pub trait ActionBuilder {
+/// Create concrete filesystem actions.
+pub trait ActionBuilder: fmt::Debug {
     // TODO(epage):
     // - Change to `Iterator`.
+    /// Create concrete filesystem actions.
+    ///
+    /// - `target_dir`: The location everything will be written to (ie the stage).
     fn build(&self, target_dir: &path::Path) -> Result<Vec<Box<action::Action>>, failure::Error>;
 }
 
@@ -39,7 +44,7 @@ impl<A: ActionBuilder + ?Sized> ActionBuilder for Box<A> {
 /// For each stage target, a list of sources to populate it with.
 ///
 /// The target is a path relative to the stage root.
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct Stage(BTreeMap<path::PathBuf, Vec<Box<ActionBuilder>>>);
 
 impl ActionBuilder for Stage {
@@ -142,6 +147,8 @@ pub struct SourceFiles {
     ///
     /// [gitignore]: https://git-scm.com/docs/gitignore#_pattern_format
     pub pattern: Vec<String>,
+    /// When true, symbolic links are followed as if they were normal directories and files.
+    /// If a symbolic link is broken or is involved in a loop, an error is yielded.
     pub follow_links: bool,
     /// Toggles whether no results for the pattern constitutes an error.
     ///

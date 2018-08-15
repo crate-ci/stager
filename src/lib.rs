@@ -24,7 +24,7 @@
 //!
 //! [tarball]: https://github.com/crate-ci/cargo-tarball
 
-#![warn(warnings)]
+#![warn(missing_docs, missing_debug_implementations)]
 
 #[macro_use]
 extern crate failure;

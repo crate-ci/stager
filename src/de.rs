@@ -28,6 +28,7 @@
 //! ```
 
 use std::collections::BTreeMap;
+use std::fmt;
 use std::path;
 
 use failure;
@@ -38,6 +39,7 @@ use error;
 
 /// Translate user-facing configuration to the staging APIs.
 pub trait ActionRender {
+    /// Format the serialized data into an `ActionBuilder`.
     fn format(
         &self,
         engine: &TemplateEngine,
@@ -104,9 +106,13 @@ impl<R: ActionRender> Default for CustomMapStage<R> {
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type")]
+/// Content to stage.
 pub enum Source {
+    /// Specifies a file to be staged into the target directory.
     SourceFile(SourceFile),
+    /// Specifies a collection of files to be staged into the target directory.
     SourceFiles(SourceFiles),
+    /// Specifies a symbolic link file to be staged into the target directory.
     Symlink(Symlink),
 }
 
@@ -255,40 +261,79 @@ impl ActionRender for Symlink {
 // Either way, might be better to switch to another template engine if it looks like its getting
 // traction within Rust community (like whatever is used for cargo templates) and to one that will
 // be 1.0 sooner.
+/// String-templating engine for staging fields.
 pub struct TemplateEngine {
-    pub parser: liquid::Parser,
-    pub data: liquid::Object,
+    parser: liquid::Parser,
+    globals: liquid::Object,
 }
 
 impl TemplateEngine {
-    pub fn new(data: liquid::Object) -> Result<Self, failure::Error> {
+    /// Create a new string-template engine, initialized with `global` variables.
+    pub fn new(globals: liquid::Object) -> Result<Self, failure::Error> {
         // TODO(eage): Better customize liquid
         // - Add raw block
         // - Remove irrelevant filters (like HTML ones)
         // - Add path manipulation filters
         let parser = liquid::ParserBuilder::new().liquid_filters().build();
-        Ok(Self { parser, data })
+        Ok(Self { parser, globals })
     }
 
+    /// Evaluate `template`.
     pub fn render(&self, template: &str) -> Result<String, failure::Error> {
         // TODO(epage): get liquid to be compatible with failure::Fail
         let template = self.parser.parse(template)?;
-        let content = template.render(&self.data)?;
+        let content = template.render(&self.globals)?;
         Ok(content)
+    }
+}
+
+impl fmt::Debug for TemplateEngine {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.debug_struct("TemplateEngine")
+            .field("parser", &"?")
+            .field("globals", &self.globals)
+            .finish()
     }
 }
 
 /// Translate user-facing value to a staging value.
 pub trait TemplateRender {
+    /// Data type the template generates.
     type Rendered;
 
+    /// Evaluate into `Rendered` using `engine`.
     fn format(&self, engine: &TemplateEngine) -> Result<Self::Rendered, failure::Error>;
 }
 
+/// Stager field that is a single template string.
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
+pub struct Template(String);
+
+impl Template {
+    /// Treat `s` as a template string.
+    pub fn new<S>(s: S) -> Self
+    where
+        S: Into<String>,
+    {
+        Self { 0: s.into() }
+    }
+}
+
+impl TemplateRender for Template {
+    type Rendered = String;
+
+    fn format(&self, engine: &TemplateEngine) -> Result<String, failure::Error> {
+        engine.render(&self.0)
+    }
+}
+
+/// Stager field that is logically a sequence of templates but can be shortened to a single value.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum OneOrMany<T> {
+    /// Short-cut for a sequence of template-strings.
     One(T),
+    /// Template-strings.
     Many(Vec<T>),
 }
 
@@ -309,26 +354,6 @@ where
                 u
             }
         }
-    }
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
-pub struct Template(String);
-
-impl Template {
-    pub fn new<S>(s: S) -> Self
-    where
-        S: Into<String>,
-    {
-        Self { 0: s.into() }
-    }
-}
-
-impl TemplateRender for Template {
-    type Rendered = String;
-
-    fn format(&self, engine: &TemplateEngine) -> Result<String, failure::Error> {
-        engine.render(&self.0)
     }
 }
 
