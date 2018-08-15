@@ -41,5 +41,7 @@ pub mod action;
 pub mod builder;
 #[cfg(feature = "de")]
 pub mod de;
+#[cfg(feature = "de")]
+mod template;
 
 mod error;
