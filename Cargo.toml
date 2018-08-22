@@ -30,6 +30,8 @@ cli = [
 [dependencies]
 failure = "0.1.1"
 globwalk = "0.3"
+# HACK: Needed for parts of `globwalk`s API
+walkdir = "2"
 log = "0.4"
 
 liquid = { version = "0.14", optional = true }

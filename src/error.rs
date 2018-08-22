@@ -1,7 +1,10 @@
+use std::error::Error;
 use std::fmt;
 use std::iter;
 
 use failure;
+
+type ErrorCause = Error + Send + Sync + 'static;
 
 pub struct ErrorPartition<'e, I> {
     iter: I,
@@ -14,18 +17,6 @@ where
 {
     pub fn new(iter: I, errors: &'e mut Errors) -> Self {
         Self { iter, errors }
-    }
-}
-
-impl<'e, I> fmt::Debug for ErrorPartition<'e, I>
-where
-    I: fmt::Debug,
-{
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.debug_struct("ErrorPartition")
-            .field("iter", &self.iter)
-            .field("errors", &self.errors)
-            .finish()
     }
 }
 
@@ -48,6 +39,18 @@ where
 
     fn size_hint(&self) -> (usize, Option<usize>) {
         self.iter.size_hint()
+    }
+}
+
+impl<'e, I> fmt::Debug for ErrorPartition<'e, I>
+where
+    I: fmt::Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.debug_struct("ErrorPartition")
+            .field("iter", &self.iter)
+            .field("errors", &self.errors)
+            .finish()
     }
 }
 
@@ -104,5 +107,94 @@ impl iter::FromIterator<failure::Error> for Errors {
     {
         let errors = iter.into_iter().collect();
         Self { errors }
+    }
+}
+
+/// For programmatically processing failures.
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum ErrorKind {
+    InvalidConfiguration,
+    HarvestingFailed,
+    StagingFailed,
+}
+
+impl ErrorKind {
+    pub(crate) fn error(self) -> StagingError {
+        StagingError::new(self)
+    }
+}
+
+impl fmt::Display for ErrorKind {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            ErrorKind::InvalidConfiguration => write!(f, "Error in the configuration."),
+            ErrorKind::HarvestingFailed => write!(f, "Preparing to stage failed."),
+            ErrorKind::StagingFailed => write!(f, "Staging failed."),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct StagingError {
+    kind: ErrorKind,
+    context: Option<String>,
+    cause: Option<Box<ErrorCause>>,
+}
+
+impl StagingError {
+    pub(crate) fn new(kind: ErrorKind) -> Self {
+        Self {
+            kind,
+            context: None,
+            cause: None,
+        }
+    }
+
+    pub(crate) fn set_context<S>(mut self, context: S) -> Self
+    where
+        S: Into<String>,
+    {
+        let context = context.into();
+        self.context = Some(context);
+        self
+    }
+
+    pub(crate) fn set_cause<E>(mut self, cause: E) -> Self
+    where
+        E: Error + Send + Sync + 'static,
+    {
+        let cause = Box::new(cause);
+        self.cause = Some(cause);
+        self
+    }
+
+    pub fn kind(&self) -> ErrorKind {
+        self.kind
+    }
+}
+
+impl Error for StagingError {
+    fn description(&self) -> &str {
+        "Staging failed."
+    }
+
+    fn cause(&self) -> Option<&Error> {
+        self.cause.as_ref().map(|c| {
+            let c: &Error = c.as_ref();
+            c
+        })
+    }
+}
+
+impl fmt::Display for StagingError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        writeln!(f, "Staging failed: {}", self.kind)?;
+        if let Some(ref context) = self.context {
+            writeln!(f, "{}", context)?;
+        }
+        if let Some(ref cause) = self.cause {
+            writeln!(f, "Cause: {}", cause)?;
+        }
+        Ok(())
     }
 }

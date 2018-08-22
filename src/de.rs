@@ -265,9 +265,11 @@ impl ActionRender for Symlink {
     }
 }
 
-fn abs_to_rel(abs: &str) -> Result<path::PathBuf, failure::Error> {
+fn abs_to_rel(abs: &str) -> Result<path::PathBuf, error::StagingError> {
     if !abs.starts_with('/') {
-        bail!("Path is not absolute (within the state): {}", abs);
+        return Err(error::ErrorKind::InvalidConfiguration
+            .error()
+            .set_context(format!("Path is not absolute (within the state): {}", abs)));
     }
 
     let rel = abs.trim_left_matches('/');
@@ -275,7 +277,9 @@ fn abs_to_rel(abs: &str) -> Result<path::PathBuf, failure::Error> {
     for part in rel.split('/').filter(|s| !s.is_empty() && *s != ".") {
         if part == ".." {
             if !path.pop() {
-                bail!("Path is outside of staging root: {:?}", abs);
+                return Err(error::ErrorKind::InvalidConfiguration
+                    .error()
+                    .set_context(format!("Path is outside of staging root: {:?}", abs)));
             }
         } else {
             path.push(part);

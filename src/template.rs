@@ -1,8 +1,9 @@
 use std::fmt;
 
 use failure;
-
 use liquid;
+
+use error;
 
 // TODO(epage): Look into making template system pluggable
 // - Leverage traits
@@ -31,8 +32,12 @@ impl TemplateEngine {
     /// Evaluate `template`.
     pub fn render(&self, template: &str) -> Result<String, failure::Error> {
         // TODO(epage): get liquid to be compatible with failure::Fail
-        let template = self.parser.parse(template)?;
-        let content = template.render(&self.globals)?;
+        let template = self.parser
+            .parse(template)
+            .map_err(|e| error::ErrorKind::InvalidConfiguration.error().set_cause(e))?;
+        let content = template
+            .render(&self.globals)
+            .map_err(|e| error::ErrorKind::InvalidConfiguration.error().set_cause(e))?;
         Ok(content)
     }
 }
