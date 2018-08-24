@@ -18,7 +18,6 @@ use std::fmt;
 use std::iter;
 use std::path;
 
-use failure;
 use globwalk;
 use walkdir;
 
@@ -246,7 +245,6 @@ impl ActionBuilder for SourceFiles {
                 .follow_links(self.follow_links)
                 .into_iter()
                 .map(|entry| copy_entry(entry, source_root, target_dir))
-                .map(|a| a.map_err(|e| failure::Error::from(e)))
                 .filter_map(|action| action.map(|o| o.map(Ok)).unwrap_or_else(|e| Some(Err(e))));
             let actions = error::ErrorPartition::new(actions, &mut errors);
             let actions: Vec<_> = actions.collect();

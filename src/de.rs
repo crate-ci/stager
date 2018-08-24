@@ -30,8 +30,6 @@
 use std::collections::BTreeMap;
 use std::path;
 
-use failure;
-
 use builder;
 use error;
 
@@ -64,17 +62,15 @@ impl<R: ActionRender> CustomMapStage<R> {
         for (target, sources) in &self.0 {
             let target = abs_to_rel(&target.format(engine)?)?;
 
-            let sources: &Vec<R> = sources;
-            let sources = {
-                let sources = sources
-                    .into_iter()
-                    .map(|s| s.format(engine))
-                    .map(|a| a.map_err(|e| failure::Error::from(e)));
-                let sources = error::ErrorPartition::new(sources, &mut errors);
-                let sources: Vec<_> = sources.collect();
-                sources
-            };
-            stage.insert(target, sources);
+            let mut actions = Vec::with_capacity(sources.len());
+            for source in sources {
+                let action = source.format(engine);
+                match action {
+                    Ok(action) => actions.push(action),
+                    Err(error) => errors.extend(error),
+                }
+            }
+            stage.insert(target, actions);
         }
 
         let stage = builder::Stage::new(stage);

@@ -26,7 +26,6 @@
 
 #![warn(missing_docs, missing_debug_implementations)]
 
-extern crate failure;
 extern crate globwalk;
 #[cfg(feature = "de")]
 extern crate liquid;

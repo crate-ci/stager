@@ -30,7 +30,6 @@ impl TemplateEngine {
 
     /// Evaluate `template`.
     pub fn render(&self, template: &str) -> Result<String, error::StagingError> {
-        // TODO(epage): get liquid to be compatible with failure::Fail
         let template = self.parser
             .parse(template)
             .map_err(|e| error::ErrorKind::InvalidConfiguration.error().set_cause(e))?;

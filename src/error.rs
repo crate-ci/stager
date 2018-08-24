@@ -5,8 +5,6 @@ use std::fmt;
 use std::iter;
 use std::vec;
 
-use failure;
-
 type ErrorCause = Error + Send + Sync + 'static;
 
 pub(crate) struct ErrorPartition<'e, I> {
@@ -16,7 +14,7 @@ pub(crate) struct ErrorPartition<'e, I> {
 
 impl<'e, I, T> ErrorPartition<'e, I>
 where
-    I: Iterator<Item = Result<T, failure::Error>>,
+    I: Iterator<Item = Result<T, StagingError>>,
 {
     pub fn new(iter: I, errors: &'e mut Errors) -> Self {
         Self { iter, errors }
@@ -25,7 +23,7 @@ where
 
 impl<'e, I, T> Iterator for ErrorPartition<'e, I>
 where
-    I: Iterator<Item = Result<T, failure::Error>>,
+    I: Iterator<Item = Result<T, StagingError>>,
 {
     type Item = T;
 
@@ -60,7 +58,7 @@ where
 /// Aggregation of errors from a staging operation.
 #[derive(Debug)]
 pub struct Errors {
-    errors: Vec<failure::Error>,
+    errors: Vec<StagingError>,
 }
 
 impl Errors {
@@ -68,12 +66,12 @@ impl Errors {
         Self { errors: Vec::new() }
     }
 
-    pub(crate) fn with_error(error: failure::Error) -> Self {
+    pub(crate) fn with_error(error: StagingError) -> Self {
         let errors = vec![error];
         Self { errors }
     }
 
-    pub(crate) fn push(&mut self, error: failure::Error) {
+    pub(crate) fn push(&mut self, error: StagingError) {
         self.errors.push(error);
     }
 
@@ -116,27 +114,27 @@ impl fmt::Display for Errors {
     }
 }
 
-impl iter::FromIterator<failure::Error> for Errors {
+impl iter::FromIterator<StagingError> for Errors {
     fn from_iter<I>(iter: I) -> Self
     where
-        I: IntoIterator<Item = failure::Error>,
+        I: IntoIterator<Item = StagingError>,
     {
         let errors = iter.into_iter().collect();
         Self { errors }
     }
 }
 
-impl Extend<failure::Error> for Errors {
+impl Extend<StagingError> for Errors {
     fn extend<I>(&mut self, iter: I)
     where
-        I: IntoIterator<Item = failure::Error>,
+        I: IntoIterator<Item = StagingError>,
     {
         self.errors.extend(iter)
     }
 }
 
 impl IntoIterator for Errors {
-    type Item = failure::Error;
+    type Item = StagingError;
     type IntoIter = ErrorsIter;
 
     fn into_iter(self) -> ErrorsIter {
@@ -148,13 +146,13 @@ impl IntoIterator for Errors {
 
 /// Iterate over errors from a staging operation;
 #[derive(Debug)]
-pub struct ErrorsIter(vec::IntoIter<failure::Error>);
+pub struct ErrorsIter(vec::IntoIter<StagingError>);
 
 impl Iterator for ErrorsIter {
-    type Item = failure::Error;
+    type Item = StagingError;
 
     #[inline]
-    fn next(&mut self) -> Option<failure::Error> {
+    fn next(&mut self) -> Option<StagingError> {
         self.0.next()
     }
 
