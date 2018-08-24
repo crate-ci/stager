@@ -44,4 +44,4 @@ pub mod de;
 #[cfg(feature = "de")]
 mod template;
 
-mod error;
+pub mod error;

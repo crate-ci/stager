@@ -32,11 +32,11 @@ pub trait ActionBuilder: fmt::Debug {
     /// Create concrete filesystem actions.
     ///
     /// - `target_dir`: The location everything will be written to (ie the stage).
-    fn build(&self, target_dir: &path::Path) -> Result<Vec<Box<action::Action>>, failure::Error>;
+    fn build(&self, target_dir: &path::Path) -> Result<Vec<Box<action::Action>>, error::Errors>;
 }
 
 impl<A: ActionBuilder + ?Sized> ActionBuilder for Box<A> {
-    fn build(&self, target_dir: &path::Path) -> Result<Vec<Box<action::Action>>, failure::Error> {
+    fn build(&self, target_dir: &path::Path) -> Result<Vec<Box<action::Action>>, error::Errors> {
         let target: &A = &self;
         target.build(target_dir)
     }
@@ -48,36 +48,38 @@ impl<A: ActionBuilder + ?Sized> ActionBuilder for Box<A> {
 #[derive(Default, Debug)]
 pub struct Stage(BTreeMap<path::PathBuf, Vec<Box<ActionBuilder>>>);
 
+impl Stage {
+    pub(crate) fn new(stage: BTreeMap<path::PathBuf, Vec<Box<ActionBuilder>>>) -> Self {
+        Self { 0: stage }
+    }
+}
+
 impl ActionBuilder for Stage {
-    fn build(&self, target_dir: &path::Path) -> Result<Vec<Box<action::Action>>, failure::Error> {
-        let staging: Result<Vec<_>, _> = self.0
-            .iter()
-            .map(|(target, sources)| {
-                if target.is_absolute() {
-                    Err(error::ErrorKind::HarvestingFailed
+    fn build(&self, target_dir: &path::Path) -> Result<Vec<Box<action::Action>>, error::Errors> {
+        let mut actions = vec![];
+        let mut errors = error::Errors::new();
+        for (target, sources) in &self.0 {
+            if target.is_absolute() {
+                errors.push(
+                    error::ErrorKind::HarvestingFailed
                         .error()
                         .set_context(format!(
                             "target must be relative to the stage root: {:?}",
                             target
-                        )))?;
+                        ))
+                        .into(),
+                );
+                continue;
+            }
+            let target = target_dir.join(target);
+            for source_actions in sources.into_iter().map(|s| s.build(&target)) {
+                match source_actions {
+                    Ok(source_actions) => actions.extend(source_actions),
+                    Err(source_errors) => errors.extend(source_errors),
                 }
-                let target = target_dir.join(target);
-                let mut errors = error::Errors::new();
-                let sources = {
-                    let sources = sources.into_iter().map(|s| s.build(&target));
-                    let sources = error::ErrorPartition::new(sources, &mut errors);
-                    let sources: Vec<_> = sources.collect();
-                    sources
-                };
-                errors.ok(sources)
-            })
-            .collect();
-        let staging = staging?;
-        let staging: Vec<_> = staging
-            .into_iter()
-            .flat_map(|v| v.into_iter().flat_map(|v: Vec<_>| v.into_iter()))
-            .collect();
-        Ok(staging)
+            }
+        }
+        errors.ok(actions)
     }
 }
 
@@ -129,7 +131,7 @@ impl SourceFile {
 }
 
 impl ActionBuilder for SourceFile {
-    fn build(&self, target_dir: &path::Path) -> Result<Vec<Box<action::Action>>, failure::Error> {
+    fn build(&self, target_dir: &path::Path) -> Result<Vec<Box<action::Action>>, error::Errors> {
         let path = self.path.as_path();
         if !path.is_absolute() {
             Err(error::ErrorKind::HarvestingFailed
@@ -225,7 +227,7 @@ impl SourceFiles {
 }
 
 impl ActionBuilder for SourceFiles {
-    fn build(&self, target_dir: &path::Path) -> Result<Vec<Box<action::Action>>, failure::Error> {
+    fn build(&self, target_dir: &path::Path) -> Result<Vec<Box<action::Action>>, error::Errors> {
         let source_root = self.path.as_path();
         if !source_root.is_absolute() {
             Err(error::ErrorKind::HarvestingFailed
@@ -238,9 +240,8 @@ impl ActionBuilder for SourceFiles {
 
         let mut errors = error::Errors::new();
         let actions: Vec<_> = {
-            let actions = globwalk::GlobWalker::from_patterns(source_root, &self.pattern).map_err(
-                |e| failure::Error::from(error::ErrorKind::HarvestingFailed.error().set_cause(e)),
-            )?;
+            let actions = globwalk::GlobWalker::from_patterns(source_root, &self.pattern)
+                .map_err(|e| error::ErrorKind::HarvestingFailed.error().set_cause(e))?;
             let actions = actions
                 .follow_links(self.follow_links)
                 .into_iter()
@@ -320,7 +321,7 @@ impl Symlink {
 }
 
 impl ActionBuilder for Symlink {
-    fn build(&self, target_dir: &path::Path) -> Result<Vec<Box<action::Action>>, failure::Error> {
+    fn build(&self, target_dir: &path::Path) -> Result<Vec<Box<action::Action>>, error::Errors> {
         let target = self.target.as_path();
 
         let filename = self.rename

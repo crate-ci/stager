@@ -4,15 +4,13 @@ use std::fmt;
 use std::fs;
 use std::path;
 
-use failure;
-
 use error;
 
 // `Display` is required for dry-runs / previews.
 /// Operation for setting up staged directory tree.
 pub trait Action: fmt::Display + fmt::Debug {
     /// Execute the current action, writing to the stage.
-    fn perform(&self) -> Result<(), failure::Error>;
+    fn perform(&self) -> Result<(), error::StagingError>;
 }
 
 /// Specifies a staged directory to be created.
@@ -42,7 +40,7 @@ impl fmt::Display for CreateDirectory {
 }
 
 impl Action for CreateDirectory {
-    fn perform(&self) -> Result<(), failure::Error> {
+    fn perform(&self) -> Result<(), error::StagingError> {
         fs::create_dir_all(&self.staged)
             .map_err(|e| error::ErrorKind::StagingFailed.error().set_cause(e))?;
 
@@ -81,7 +79,7 @@ impl fmt::Display for CopyFile {
 }
 
 impl Action for CopyFile {
-    fn perform(&self) -> Result<(), failure::Error> {
+    fn perform(&self) -> Result<(), error::StagingError> {
         if let Some(parent) = self.staged.parent() {
             fs::create_dir_all(parent)
                 .map_err(|e| error::ErrorKind::StagingFailed.error().set_cause(e))?;
@@ -124,7 +122,7 @@ impl fmt::Display for Symlink {
 }
 
 impl Action for Symlink {
-    fn perform(&self) -> Result<(), failure::Error> {
+    fn perform(&self) -> Result<(), error::StagingError> {
         if let Some(parent) = self.staged.parent() {
             fs::create_dir_all(parent)
                 .map_err(|e| error::ErrorKind::StagingFailed.error().set_cause(e))?;
