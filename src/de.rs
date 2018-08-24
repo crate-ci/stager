@@ -152,11 +152,12 @@ impl SourceFile {
             .map(|a| a.format(engine))
             .map_or(Ok(None), |r| r.map(Some))?
             .unwrap_or_default();
+        let rename = self.rename
+            .as_ref()
+            .map(|t| t.format(engine))
+            .map_or(Ok(None), |r| r.map(Some))?;
         let value = builder::SourceFile::new(path)
-            .rename(self.rename
-                .as_ref()
-                .map(|t| t.format(engine))
-                .map_or(Ok(None), |r| r.map(Some))?)
+            .rename(rename)
             .push_symlinks(symlink.into_iter());
         Ok(value)
     }
