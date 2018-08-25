@@ -1,8 +1,8 @@
 use std::fmt;
 
-use failure;
-
 use liquid;
+
+use error;
 
 // TODO(epage): Look into making template system pluggable
 // - Leverage traits
@@ -19,7 +19,7 @@ pub struct TemplateEngine {
 
 impl TemplateEngine {
     /// Create a new string-template engine, initialized with `global` variables.
-    pub fn new(globals: liquid::Object) -> Result<Self, failure::Error> {
+    pub fn new(globals: liquid::Object) -> Result<Self, error::StagingError> {
         // TODO(eage): Better customize liquid
         // - Add raw block
         // - Remove irrelevant filters (like HTML ones)
@@ -29,10 +29,13 @@ impl TemplateEngine {
     }
 
     /// Evaluate `template`.
-    pub fn render(&self, template: &str) -> Result<String, failure::Error> {
-        // TODO(epage): get liquid to be compatible with failure::Fail
-        let template = self.parser.parse(template)?;
-        let content = template.render(&self.globals)?;
+    pub fn render(&self, template: &str) -> Result<String, error::StagingError> {
+        let template = self.parser
+            .parse(template)
+            .map_err(|e| error::ErrorKind::InvalidConfiguration.error().set_cause(e))?;
+        let content = template
+            .render(&self.globals)
+            .map_err(|e| error::ErrorKind::InvalidConfiguration.error().set_cause(e))?;
         Ok(content)
     }
 }
@@ -52,7 +55,7 @@ pub trait TemplateRender {
     type Rendered;
 
     /// Evaluate into `Rendered` using `engine`.
-    fn format(&self, engine: &TemplateEngine) -> Result<Self::Rendered, failure::Error>;
+    fn format(&self, engine: &TemplateEngine) -> Result<Self::Rendered, error::StagingError>;
 }
 
 /// Stager field that is a single template string.
@@ -72,7 +75,7 @@ impl Template {
 impl TemplateRender for Template {
     type Rendered = String;
 
-    fn format(&self, engine: &TemplateEngine) -> Result<String, failure::Error> {
+    fn format(&self, engine: &TemplateEngine) -> Result<String, error::StagingError> {
         engine.render(&self.0)
     }
 }
@@ -93,7 +96,7 @@ where
 {
     type Rendered = Vec<T::Rendered>;
 
-    fn format(&self, engine: &TemplateEngine) -> Result<Self::Rendered, failure::Error> {
+    fn format(&self, engine: &TemplateEngine) -> Result<Self::Rendered, error::StagingError> {
         match *self {
             OneOrMany::One(ref v) => {
                 let u = v.format(engine)?;

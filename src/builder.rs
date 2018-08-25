@@ -18,8 +18,8 @@ use std::fmt;
 use std::iter;
 use std::path;
 
-use failure;
 use globwalk;
+use walkdir;
 
 use action;
 use error;
@@ -31,11 +31,11 @@ pub trait ActionBuilder: fmt::Debug {
     /// Create concrete filesystem actions.
     ///
     /// - `target_dir`: The location everything will be written to (ie the stage).
-    fn build(&self, target_dir: &path::Path) -> Result<Vec<Box<action::Action>>, failure::Error>;
+    fn build(&self, target_dir: &path::Path) -> Result<Vec<Box<action::Action>>, error::Errors>;
 }
 
 impl<A: ActionBuilder + ?Sized> ActionBuilder for Box<A> {
-    fn build(&self, target_dir: &path::Path) -> Result<Vec<Box<action::Action>>, failure::Error> {
+    fn build(&self, target_dir: &path::Path) -> Result<Vec<Box<action::Action>>, error::Errors> {
         let target: &A = &self;
         target.build(target_dir)
     }
@@ -47,31 +47,37 @@ impl<A: ActionBuilder + ?Sized> ActionBuilder for Box<A> {
 #[derive(Default, Debug)]
 pub struct Stage(BTreeMap<path::PathBuf, Vec<Box<ActionBuilder>>>);
 
+impl Stage {
+    pub(crate) fn new(stage: BTreeMap<path::PathBuf, Vec<Box<ActionBuilder>>>) -> Self {
+        Self { 0: stage }
+    }
+}
+
 impl ActionBuilder for Stage {
-    fn build(&self, target_dir: &path::Path) -> Result<Vec<Box<action::Action>>, failure::Error> {
-        let staging: Result<Vec<_>, _> = self.0
-            .iter()
-            .map(|(target, sources)| {
-                if target.is_absolute() {
-                    bail!("target must be relative to the stage root: {:?}", target);
+    fn build(&self, target_dir: &path::Path) -> Result<Vec<Box<action::Action>>, error::Errors> {
+        let mut actions = vec![];
+        let mut errors = error::Errors::new();
+        for (target, sources) in &self.0 {
+            if target.is_absolute() {
+                errors.push(
+                    error::ErrorKind::HarvestingFailed
+                        .error()
+                        .set_context(format!(
+                            "target must be relative to the stage root: {:?}",
+                            target
+                        )),
+                );
+                continue;
+            }
+            let target = target_dir.join(target);
+            for source_actions in sources.into_iter().map(|s| s.build(&target)) {
+                match source_actions {
+                    Ok(source_actions) => actions.extend(source_actions),
+                    Err(source_errors) => errors.extend(source_errors),
                 }
-                let target = target_dir.join(target);
-                let mut errors = error::Errors::new();
-                let sources = {
-                    let sources = sources.into_iter().map(|s| s.build(&target));
-                    let sources = error::ErrorPartition::new(sources, &mut errors);
-                    let sources: Vec<_> = sources.collect();
-                    sources
-                };
-                errors.ok(sources)
-            })
-            .collect();
-        let staging = staging?;
-        let staging: Vec<_> = staging
-            .into_iter()
-            .flat_map(|v| v.into_iter().flat_map(|v: Vec<_>| v.into_iter()))
-            .collect();
-        Ok(staging)
+            }
+        }
+        errors.ok(actions)
     }
 }
 
@@ -123,10 +129,12 @@ impl SourceFile {
 }
 
 impl ActionBuilder for SourceFile {
-    fn build(&self, target_dir: &path::Path) -> Result<Vec<Box<action::Action>>, failure::Error> {
+    fn build(&self, target_dir: &path::Path) -> Result<Vec<Box<action::Action>>, error::Errors> {
         let path = self.path.as_path();
         if !path.is_absolute() {
-            bail!("SourceFile path must be absolute: {:?}", path);
+            Err(error::ErrorKind::HarvestingFailed
+                .error()
+                .set_context(format!("SourceFile path must be absolute: {:?}", path)))?;
         }
 
         let filename = self.rename
@@ -135,10 +143,12 @@ impl ActionBuilder for SourceFile {
             .unwrap_or_else(|| path.file_name().unwrap_or_default());
         let filename = path::Path::new(filename);
         if filename.file_name() != Some(filename.as_os_str()) {
-            bail!(
-                "SourceFile rename must not change directories: {:?}",
-                filename
-            );
+            Err(error::ErrorKind::HarvestingFailed
+                .error()
+                .set_context(format!(
+                    "SourceFile rename must not change directories: {:?}",
+                    filename
+                )))?;
         }
         let copy_target = target_dir.join(filename);
         let copy: Box<action::Action> = Box::new(action::CopyFile::new(&copy_target, path));
@@ -215,26 +225,30 @@ impl SourceFiles {
 }
 
 impl ActionBuilder for SourceFiles {
-    fn build(&self, target_dir: &path::Path) -> Result<Vec<Box<action::Action>>, failure::Error> {
-        let mut actions: Vec<Box<action::Action>> = Vec::new();
+    fn build(&self, target_dir: &path::Path) -> Result<Vec<Box<action::Action>>, error::Errors> {
         let source_root = self.path.as_path();
         if !source_root.is_absolute() {
-            bail!("SourceFiles path must be absolute: {:?}", source_root);
+            Err(error::ErrorKind::HarvestingFailed
+                .error()
+                .set_context(format!(
+                    "SourceFiles path must be absolute: {:?}",
+                    source_root
+                )))?
         }
-        for entry in globwalk::GlobWalker::from_patterns(source_root, &self.pattern)?
-            .follow_links(self.follow_links)
-        {
-            let entry = entry?;
-            let source_file = entry.path();
-            if source_file.is_dir() {
-                continue;
-            }
-            let rel_source = source_file.strip_prefix(source_root)?;
-            let copy_target = target_dir.join(rel_source);
-            let copy: Box<action::Action> =
-                Box::new(action::CopyFile::new(&copy_target, source_file));
-            actions.push(copy);
-        }
+
+        let mut errors = error::Errors::new();
+        let actions: Vec<_> = {
+            let actions = globwalk::GlobWalker::from_patterns(source_root, &self.pattern)
+                .map_err(|e| error::ErrorKind::HarvestingFailed.error().set_cause(e))?;
+            let actions = actions
+                .follow_links(self.follow_links)
+                .into_iter()
+                .map(|entry| copy_entry(entry, source_root, target_dir))
+                .filter_map(|action| action.map(|o| o.map(Ok)).unwrap_or_else(|e| Some(Err(e))));
+            let actions = error::ErrorPartition::new(actions, &mut errors);
+            let actions: Vec<_> = actions.collect();
+            actions
+        };
 
         if actions.is_empty() {
             if self.allow_empty {
@@ -243,16 +257,35 @@ impl ActionBuilder for SourceFiles {
                     self.path, self.pattern
                 );
             } else {
-                bail!(
-                    "No files found under {:?} with patterns {:?}",
-                    self.path,
-                    self.pattern
-                );
+                Err(error::ErrorKind::HarvestingFailed
+                    .error()
+                    .set_context(format!(
+                        "No files found under {:?} with patterns {:?}",
+                        self.path, self.pattern
+                    )))?
             }
         }
 
-        Ok(actions)
+        errors.ok(actions)
     }
+}
+
+fn copy_entry(
+    entry: Result<walkdir::DirEntry, globwalk::WalkError>,
+    source_root: &path::Path,
+    target_dir: &path::Path,
+) -> Result<Option<Box<action::Action>>, error::StagingError> {
+    let entry = entry.map_err(|e| error::ErrorKind::HarvestingFailed.error().set_cause(e))?;
+    let source_file = entry.path();
+    if source_file.is_dir() {
+        return Ok(None);
+    }
+    let rel_source = source_file
+        .strip_prefix(source_root)
+        .map_err(|e| error::ErrorKind::HarvestingFailed.error().set_cause(e))?;
+    let copy_target = target_dir.join(rel_source);
+    let copy: Box<action::Action> = Box::new(action::CopyFile::new(&copy_target, source_file));
+    Ok(Some(copy))
 }
 
 /// Specifies a symbolic link file to be staged into the target directory.
@@ -285,7 +318,7 @@ impl Symlink {
 }
 
 impl ActionBuilder for Symlink {
-    fn build(&self, target_dir: &path::Path) -> Result<Vec<Box<action::Action>>, failure::Error> {
+    fn build(&self, target_dir: &path::Path) -> Result<Vec<Box<action::Action>>, error::Errors> {
         let target = self.target.as_path();
 
         let filename = self.rename
@@ -294,7 +327,12 @@ impl ActionBuilder for Symlink {
             .unwrap_or_else(|| target.file_name().unwrap_or_default());
         let filename = path::Path::new(filename);
         if filename.file_name() != Some(filename.as_os_str()) {
-            bail!("Symlink rename must not change directories: {:?}", filename);
+            Err(error::ErrorKind::HarvestingFailed
+                .error()
+                .set_context(format!(
+                    "Symlink rename must not change directories: {:?}",
+                    filename,
+                )))?
         }
         let staged = target_dir.join(filename);
         let link: Box<action::Action> = Box::new(action::Symlink::new(&staged, target));
