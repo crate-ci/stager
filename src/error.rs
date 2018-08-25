@@ -101,7 +101,7 @@ impl Error for Errors {
 
 impl From<StagingError> for Errors {
     fn from(error: StagingError) -> Self {
-        Errors::with_error(error.into())
+        Errors::with_error(error)
     }
 }
 

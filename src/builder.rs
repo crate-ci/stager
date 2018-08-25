@@ -65,8 +65,7 @@ impl ActionBuilder for Stage {
                         .set_context(format!(
                             "target must be relative to the stage root: {:?}",
                             target
-                        ))
-                        .into(),
+                        )),
                 );
                 continue;
             }
