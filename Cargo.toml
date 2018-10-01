@@ -29,7 +29,7 @@ cli = [
 ]
 
 [dependencies]
-globwalk = "0.4"
+globwalk = "0.5"
 # HACK: Needed for parts of `globwalk`s API
 walkdir = "2"
 log = "0.4"
